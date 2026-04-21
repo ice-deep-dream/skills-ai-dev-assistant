@@ -1,0 +1,40 @@
+{
+  "name": "ai-dev-assistant",
+  "version": "1.0.0",
+  "description": "AI 开发助手 - 辅助 AI 进行开发文档编写（计划、开发、BUG、总结）",
+  "author": "AI Assistant",
+  "license": "MIT",
+  "main": "src/index.js",
+  "keywords": [
+    "ai",
+    "dev",
+    "assistant",
+    "documentation",
+    "planning",
+    "bug-tracking"
+  ],
+  "commands": [
+    {
+      "name": "init-docs",
+      "description": "初始化 docs 目录，复制模板到项目根目录"
+    },
+    {
+      "name": "analyze-project",
+      "description": "分析项目并生成 AGENTS.md 文件"
+    },
+    {
+      "name": "update-vitepress-config",
+      "description": "自动更新 VitePress 侧边栏配置（新增文档时调用）"
+    },
+    {
+      "name": "update-index-files",
+      "description": "更新 index.md 进度表格"
+    }
+  ],
+  "permissions": [
+    "file:read",
+    "file:write",
+    "file:copy",
+    "shell:exec"
+  ]
+}

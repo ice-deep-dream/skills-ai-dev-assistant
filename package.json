@@ -1,0 +1,19 @@
+{
+  "name": "ai-dev-assistant",
+  "version": "1.0.0",
+  "description": "AI 开发助手 - 辅助 AI 进行开发文档编写（计划、开发、BUG、总结）",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "ai",
+    "dev",
+    "assistant",
+    "documentation",
+    "planning",
+    "bug-tracking"
+  ],
+  "author": "AI Assistant",
+  "license": "MIT"
+}
