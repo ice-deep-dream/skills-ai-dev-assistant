@@ -51,7 +51,105 @@
 
 **生成文件**: `AGENTS.md`（项目根目录）
 
-### 3. 自动更新 VitePress 配置 ⭐ 新增
+### 3. 项目模块文档创建 ⭐ 新增
+
+**命令**: `create-module-doc`
+
+自动创建前端或后端模块开发文档，使用标准模板。
+
+**使用场景**:
+- 开始新模块开发时
+- 需要标准化文档格式时
+- 快速生成文档框架时
+
+**参数**:
+- `type`: 类型（`frontend` 或 `backend`）
+- `moduleName`: 模块名称
+- `description`: 模块描述（可选）
+- `owner`: 负责人（可选，默认：developer）
+
+**执行结果**:
+- 自动选择对应模板（前端/后端）
+- 自动编号文件名（001-xxx, 002-xxx）
+- 填充基本信息（名称、负责人、日期）
+- 保存到对应目录
+
+**示例**:
+```bash
+# 创建前端模块文档
+ai-dev-assistant create-module-doc --type frontend --moduleName 用户管理 --owner 张三
+
+# 创建后端模块文档
+ai-dev-assistant create-module-doc --type backend --moduleName 订单管理 --owner 李四
+```
+
+**生成文件**:
+- 前端：`docs/03-前端开发与计划/001-用户管理开发.md`
+- 后端：`docs/04-后端开发与计划/001-订单管理开发.md`
+
+### 4. Bug 跟踪文档创建 ⭐ 新增
+
+**命令**: `create-bug-doc`
+
+自动创建 Bug 跟踪文档，使用标准 Bug 模板。
+
+**使用场景**:
+- 发现 Bug 需要记录时
+- 需要标准化 Bug 报告时
+- 追踪 Bug 修复进度时
+
+**参数**:
+- `title`: Bug 标题
+- `description`: Bug 描述（可选）
+- `priority`: 优先级（`critical`, `high`, `medium`, `low`，默认：medium）
+- `reporter`: 报告人（可选，默认：developer）
+
+**执行结果**:
+- 自动生成 Bug ID（格式：BUG-2024001）
+- 填充 Bug 模板基本信息
+- 保存到 Bug 管理目录
+
+**示例**:
+```bash
+# 创建 Bug 文档
+ai-dev-assistant create-bug-doc --title "登录页面崩溃" --priority high --reporter 测试员
+```
+
+**生成文件**:
+- `docs/06-Bug 管理/BUG-2024001-登录页面崩溃.md`
+
+### 5. 总结复盘文档创建 ⭐ 新增
+
+**命令**: `create-summary-doc`
+
+自动创建项目总结复盘文档，使用标准总结模板。
+
+**使用场景**:
+- 项目阶段性总结
+- 版本复盘
+- 项目结项总结
+
+**参数**:
+- `title`: 总结标题
+- `projectName`: 项目名称（可选）
+- `period`: 总结周期（可选，如：2024-01）
+- `author`: 作者（可选，默认：developer）
+
+**执行结果**:
+- 自动生成文件名（包含日期）
+- 填充总结模板基本信息
+- 保存到总结复盘目录
+
+**示例**:
+```bash
+# 创建项目总结
+ai-dev-assistant create-summary-doc --title "Q1 季度总结" --projectName 电商平台 --period 2024-Q1
+```
+
+**生成文件**:
+- `docs/05-总结复盘/总结 -202401-Q1 季度总结.md`
+
+### 6. 自动更新 VitePress 配置 ⭐ 新增
 
 **命令**: `update-vitepress-config`
 
@@ -74,7 +172,7 @@
 ai-dev-assistant update-vitepress-config
 ```
 
-### 4. 自动更新进度表格 ⭐ 新增
+### 7. 自动更新进度表格 ⭐ 新增
 
 **命令**: `update-index-files`
 

@@ -23,6 +23,18 @@
       "description": "分析项目并生成 AGENTS.md 文件"
     },
     {
+      "name": "create-module-doc",
+      "description": "创建模块开发文档（前端/后端）"
+    },
+    {
+      "name": "create-bug-doc",
+      "description": "创建 Bug 跟踪文档"
+    },
+    {
+      "name": "create-summary-doc",
+      "description": "创建总结复盘文档"
+    },
+    {
       "name": "update-vitepress-config",
       "description": "自动更新 VitePress 侧边栏配置（新增文档时调用）"
     },

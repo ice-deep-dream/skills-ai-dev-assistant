@@ -722,11 +722,213 @@ ${tableRows}`;
   };
 }
 
+/**
+ * 创建模块开发文档（前端/后端）
+ * @param {string} docsPath - docs 目录路径
+ * @param {object} options - 选项
+ * @param {'frontend' | 'backend'} options.type - 类型：frontend 或 backend
+ * @param {string} options.moduleName - 模块名称
+ * @param {string} options.description - 模块描述
+ * @param {string} options.owner - 负责人
+ */
+async function createModuleDoc(docsPath, options) {
+  const { type, moduleName, description = '', owner = 'developer' } = options;
+  
+  console.log(`开始创建${type === 'frontend' ? '前端' : '后端'}模块文档...`);
+  console.log(`模块名称：${moduleName}`);
+  
+  // 确定目标目录和模板
+  const targetDir = type === 'frontend' 
+    ? path.join(docsPath, '03-前端开发与计划')
+    : path.join(docsPath, '04-后端开发与计划');
+  
+  const templateFile = type === 'frontend'
+    ? path.join(docsPath, '02-模板中心', '001-前端模块开发模板.md')
+    : path.join(docsPath, '02-模板中心', '002-后端模块开发模板.md');
+  
+  // 检查目录是否存在
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  
+  // 检查模板是否存在
+  if (!fs.existsSync(templateFile)) {
+    throw new Error(`模板文件不存在：${templateFile}`);
+  }
+  
+  // 读取模板
+  let template = fs.readFileSync(templateFile, 'utf-8');
+  
+  // 生成文件名（自动编号）
+  const files = fs.readdirSync(targetDir).filter(f => f.endsWith('.md'));
+  const nextNum = files.length + 1;
+  const fileName = `${String(nextNum).padStart(3, '0')}-${moduleName}开发.md`;
+  const filePath = path.join(targetDir, fileName);
+  
+  // 替换模板中的占位符
+  const today = new Date().toISOString().split('T')[0];
+  template = template.replace(/【模块名称】/g, moduleName);
+  template = template.replace(/【模块描述】/g, description);
+  template = template.replace(/【负责人】/g, owner);
+  template = template.replace(/【创建日期】/g, today);
+  
+  // 如果是前端模块，替换前端相关占位符
+  if (type === 'frontend') {
+    template = template.replace(/【页面列表】/g, '待补充');
+    template = template.replace(/【交互说明】/g, '待补充');
+  } else {
+    template = template.replace(/【API 列表】/g, '待补充');
+    template = template.replace(/【数据结构】/g, '待补充');
+  }
+  
+  // 写入文件
+  fs.writeFileSync(filePath, template, 'utf-8');
+  
+  console.log(`✓ 模块文档创建完成`);
+  console.log(`✓ 文件位置：${filePath}`);
+  
+  return {
+    success: true,
+    message: '模块文档创建完成',
+    filePath,
+    fileName
+  };
+}
+
+/**
+ * 创建 Bug 跟踪文档
+ * @param {string} docsPath - docs 目录路径
+ * @param {object} options - 选项
+ * @param {string} options.title - Bug 标题
+ * @param {string} options.description - Bug 描述
+ * @param {'critical' | 'high' | 'medium' | 'low'} options.priority - 优先级
+ * @param {string} options.reporter - 报告人
+ */
+async function createBugDoc(docsPath, options) {
+  const { title, description = '', priority = 'medium', reporter = 'developer' } = options;
+  
+  console.log('开始创建 Bug 文档...');
+  console.log(`Bug 标题：${title}`);
+  
+  // 目标目录
+  const targetDir = path.join(docsPath, '06-Bug 管理');
+  const templateFile = path.join(docsPath, '02-模板中心', '003-Bug 模板.md');
+  
+  // 检查目录是否存在
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  
+  // 检查模板是否存在
+  if (!fs.existsSync(templateFile)) {
+    throw new Error(`模板文件不存在：${templateFile}`);
+  }
+  
+  // 读取模板
+  let template = fs.readFileSync(templateFile, 'utf-8');
+  
+  // 生成 Bug ID
+  const files = fs.readdirSync(targetDir).filter(f => f.startsWith('BUG-') && f.endsWith('.md'));
+  const nextNum = files.length + 1;
+  const bugId = `BUG-${new Date().getFullYear()}${String(nextNum).padStart(3, '0')}`;
+  const fileName = `${bugId}-${title}.md`;
+  const filePath = path.join(targetDir, fileName);
+  
+  // 替换模板中的占位符
+  const today = new Date().toISOString().split('T')[0];
+  const now = new Date().toISOString().replace('T', ' ').split('.')[0];
+  
+  template = template.replace(/【Bug ID】/g, bugId);
+  template = template.replace(/【标题】/g, title);
+  template = template.replace(/【报告人】/g, reporter);
+  template = template.replace(/【报告时间】/g, now);
+  template = template.replace(/【优先级】/g, priority.toUpperCase());
+  template = template.replace(/【问题摘要】/g, description);
+  template = template.replace(/【详细描述】/g, description);
+  
+  // 写入文件
+  fs.writeFileSync(filePath, template, 'utf-8');
+  
+  console.log(`✓ Bug 文档创建完成`);
+  console.log(`✓ 文件位置：${filePath}`);
+  
+  return {
+    success: true,
+    message: 'Bug 文档创建完成',
+    filePath,
+    fileName,
+    bugId
+  };
+}
+
+/**
+ * 创建总结复盘文档
+ * @param {string} docsPath - docs 目录路径
+ * @param {object} options - 选项
+ * @param {string} options.title - 总结标题
+ * @param {string} options.projectName - 项目名称
+ * @param {string} options.period - 总结周期（如：2024-01）
+ * @param {string} options.author - 作者
+ */
+async function createSummaryDoc(docsPath, options) {
+  const { title, projectName = '项目', period = '', author = 'developer' } = options;
+  
+  console.log('开始创建总结文档...');
+  console.log(`总结标题：${title}`);
+  
+  // 目标目录
+  const targetDir = path.join(docsPath, '05-总结复盘');
+  const templateFile = path.join(docsPath, '02-模板中心', '004-总结模板.md');
+  
+  // 检查目录是否存在
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  
+  // 检查模板是否存在
+  if (!fs.existsSync(templateFile)) {
+    throw new Error(`模板文件不存在：${templateFile}`);
+  }
+  
+  // 读取模板
+  let template = fs.readFileSync(templateFile, 'utf-8');
+  
+  // 生成文件名
+  const today = new Date().toISOString().split('T')[0];
+  const dateStr = period || today.replace(/-/g, '').slice(0, 6);
+  const fileName = `总结-${dateStr}-${title}.md`;
+  const filePath = path.join(targetDir, fileName);
+  
+  // 替换模板中的占位符
+  template = template.replace(/【项目名称】/g, projectName);
+  template = template.replace(/【总结标题】/g, title);
+  template = template.replace(/【项目负责人】/g, author);
+  template = template.replace(/【开始日期】/g, today);
+  template = template.replace(/【结束日期】/g, today);
+  template = template.replace(/【作者】/g, author);
+  
+  // 写入文件
+  fs.writeFileSync(filePath, template, 'utf-8');
+  
+  console.log(`✓ 总结文档创建完成`);
+  console.log(`✓ 文件位置：${filePath}`);
+  
+  return {
+    success: true,
+    message: '总结文档创建完成',
+    filePath,
+    fileName
+  };
+}
+
 // 导出命令
 module.exports = {
   initDocs,
   analyzeProject,
   copyDir,
   updateVitePressConfig,
-  updateIndexFiles
+  updateIndexFiles,
+  createModuleDoc,
+  createBugDoc,
+  createSummaryDoc
 };
