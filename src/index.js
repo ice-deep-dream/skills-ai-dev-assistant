@@ -921,8 +921,236 @@ async function createSummaryDoc(docsPath, options) {
   };
 }
 
+/**
+ * 智能初始化命令：初始化 docs + 分析项目 + 自动生成模块文档
+ * 首次调用时自动完成所有初始化工作，无需二次输入
+ */
+async function autoInit(projectRoot) {
+  console.log('🚀 开始智能初始化...');
+  console.log('='.repeat(50));
+  
+  const results = {
+    docsInit: null,
+    projectAnalysis: null,
+    moduleDocs: [],
+    vitepressConfig: null,
+    indexFiles: null
+  };
+  
+  try {
+    // 第 1 步：初始化 docs 目录
+    console.log('\n📁 第 1 步：初始化 docs 目录...');
+    results.docsInit = await initDocs(projectRoot);
+    
+    // 第 2 步：分析项目
+    console.log('\n🔍 第 2 步：分析项目结构...');
+    results.projectAnalysis = await analyzeProject(projectRoot);
+    
+    // 第 3 步：自动扫描项目模块并生成开发文档
+    console.log('\n📝 第 3 步：自动扫描并生成模块开发文档...');
+    const docsPath = path.join(projectRoot, 'docs');
+    const detectedModules = await detectProjectModules(projectRoot, results.projectAnalysis.analysis);
+    
+    if (detectedModules.frontend.length > 0 || detectedModules.backend.length > 0) {
+      // 生成前端模块文档
+      for (const module of detectedModules.frontend) {
+        try {
+          const docResult = await createModuleDoc(docsPath, {
+            type: 'frontend',
+            moduleName: module.name,
+            description: module.description,
+            owner: 'developer'
+          });
+          results.moduleDocs.push({ type: 'frontend', ...docResult });
+        } catch (error) {
+          console.warn(`⚠️ 前端模块文档生成失败：${module.name} - ${error.message}`);
+        }
+      }
+      
+      // 生成后端模块文档
+      for (const module of detectedModules.backend) {
+        try {
+          const docResult = await createModuleDoc(docsPath, {
+            type: 'backend',
+            moduleName: module.name,
+            description: module.description,
+            owner: 'developer'
+          });
+          results.moduleDocs.push({ type: 'backend', ...docResult });
+        } catch (error) {
+          console.warn(`⚠️ 后端模块文档生成失败：${module.name} - ${error.message}`);
+        }
+      }
+    } else {
+      console.log('ℹ️ 未检测到具体模块，已创建空白文档结构');
+    }
+    
+    // 第 4 步：更新 VitePress 配置
+    console.log('\n⚙️ 第 4 步：更新 VitePress 侧边栏配置...');
+    try {
+      results.vitepressConfig = await updateVitePressConfig(docsPath);
+    } catch (error) {
+      console.warn(`⚠️ VitePress 配置更新失败：${error.message}`);
+    }
+    
+    // 第 5 步：更新进度表格
+    console.log('\n📊 第 5 步：更新进度表格...');
+    try {
+      results.indexFiles = await updateIndexFiles(docsPath);
+    } catch (error) {
+      console.warn(`⚠️ 进度表格更新失败：${error.message}`);
+    }
+    
+    console.log('\n' + '='.repeat(50));
+    console.log('✅ 智能初始化完成！');
+    console.log(`📁 docs 目录：${results.docsInit.targetPath}`);
+    console.log(`📋 AGENTS.md：${results.projectAnalysis.filePath}`);
+    console.log(`📝 生成模块文档：${results.moduleDocs.length} 个`);
+    console.log('='.repeat(50));
+    
+    return {
+      success: true,
+      message: '智能初始化完成',
+      results
+    };
+    
+  } catch (error) {
+    console.error('❌ 智能初始化失败：', error.message);
+    throw error;
+  }
+}
+
+/**
+ * 自动检测项目中的模块
+ * 根据项目结构智能识别前端和后端模块
+ */
+async function detectProjectModules(projectRoot, analysis) {
+  const modules = {
+    frontend: [],
+    backend: []
+  };
+  
+  const { projectType, techStack } = analysis;
+  
+  // 检测前端模块
+  if (projectType === 'frontend' || projectType === 'fullstack' || projectType === 'monorepo') {
+    const srcPath = path.join(projectRoot, 'src');
+    
+    if (fs.existsSync(srcPath)) {
+      // 扫描常见的模块目录
+      const moduleDirs = ['components', 'views', 'pages', 'modules', 'features'];
+      
+      for (const dir of moduleDirs) {
+        const dirPath = path.join(srcPath, dir);
+        if (fs.existsSync(dirPath)) {
+          const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+              // 过滤掉通用目录
+              if (!['common', 'utils', 'helpers', 'assets', 'styles', 'types'].includes(entry.name)) {
+                const moduleName = formatModuleName(entry.name);
+                modules.frontend.push({
+                  name: moduleName,
+                  description: `${moduleName}模块`,
+                  path: path.join(dirPath, entry.name)
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // 如果没有检测到模块，根据项目结构创建一个基础模块
+      if (modules.frontend.length === 0) {
+        modules.frontend.push({
+          name: '基础架构',
+          description: '项目基础架构和配置',
+          path: srcPath
+        });
+      }
+    }
+  }
+  
+  // 检测后端模块
+  if (projectType === 'backend' || projectType === 'fullstack' || projectType === 'monorepo') {
+    const backendDirs = ['server', 'api', 'backend', 'src'];
+    
+    for (const dir of backendDirs) {
+      const dirPath = path.join(projectRoot, dir);
+      if (fs.existsSync(dirPath)) {
+        // 扫描后端模块目录
+        const possibleModuleDirs = ['modules', 'controllers', 'routes', 'services', 'models'];
+        
+        for (const moduleDir of possibleModuleDirs) {
+          const modulePath = path.join(dirPath, moduleDir);
+          if (fs.existsSync(modulePath)) {
+            const entries = fs.readdirSync(modulePath, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.ts'))) {
+                const moduleName = formatModuleName(entry.name.replace(/\.(js|ts)$/, ''));
+                modules.backend.push({
+                  name: moduleName,
+                  description: `${moduleName}服务`,
+                  path: path.join(modulePath, entry.name)
+                });
+              }
+            }
+          }
+        }
+        
+        // 如果没有检测到具体模块，创建一个基础后端模块
+        if (modules.backend.length === 0) {
+          modules.backend.push({
+            name: 'API 服务',
+            description: '后端 API 服务模块',
+            path: dirPath
+          });
+        }
+        
+        break; // 找到一个后端目录就停止
+      }
+    }
+  }
+  
+  // 去重
+  modules.frontend = deduplicateModules(modules.frontend);
+  modules.backend = deduplicateModules(modules.backend);
+  
+  console.log(`📦 检测到前端模块：${modules.frontend.length} 个`);
+  console.log(`📦 检测到后端模块：${modules.backend.length} 个`);
+  
+  return modules;
+}
+
+/**
+ * 格式化模块名称（统一格式）
+ */
+function formatModuleName(name) {
+  // 将 kebab-case 或 snake_case 转换为中文友好的名称
+  return name
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, l => l.toUpperCase())
+    .replace(/([A-Z])/g, ' $1')
+    .trim();
+}
+
+/**
+ * 模块去重
+ */
+function deduplicateModules(modules) {
+  const seen = new Set();
+  return modules.filter(module => {
+    if (seen.has(module.name)) {
+      return false;
+    }
+    seen.add(module.name);
+    return true;
+  });
+}
+
 // 导出命令
 module.exports = {
+  autoInit,
   initDocs,
   analyzeProject,
   copyDir,
@@ -930,5 +1158,6 @@ module.exports = {
   updateIndexFiles,
   createModuleDoc,
   createBugDoc,
-  createSummaryDoc
+  createSummaryDoc,
+  detectProjectModules
 };

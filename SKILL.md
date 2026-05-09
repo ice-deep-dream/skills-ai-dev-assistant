@@ -12,12 +12,8 @@ keywords:
   - planning
   - bug-tracking
 commands:
-  - name: init-docs
-    description: 初始化 docs 目录，复制模板到项目根目录
-  - name: analyze-project
-    description: 分析项目并生成 AGENTS.md 文件
-  - name: create-module-doc
-    description: 创建模块开发文档（前端/后端）
+  - name: auto-init
+    description: 智能初始化 - 自动完成 docs 初始化、项目分析、模块文档生成、配置更新（推荐）
   - name: create-bug-doc
     description: 创建 Bug 跟踪文档
   - name: create-summary-doc
@@ -33,7 +29,7 @@ permissions:
   - shell:exec
 usage_notes: |
   ⚠️ 重要：每次对话前必须调用此 skill！
-  1. 调用此 skill 确保文档与开发同步
+  1. 首次使用调用 auto-init 命令完成智能初始化
   2. 按照模板创建/更新开发文档
   3. 执行 update-vitepress-config 更新侧边栏
   4. 执行 update-index-files 更新进度表格
@@ -45,36 +41,23 @@ usage_notes: |
 
 ## 🎯 核心功能
 
-### 1. docs 目录初始化 (`init-docs`)
+### 1. 智能初始化 (`auto-init`) ⭐ 推荐
 
-将标准化的 docs 模板目录复制到项目根目录，包含：
-- ✅ 文档规范
-- ✅ 模板中心
-- ✅ 前端/后端开发目录
-- ✅ Bug 管理目录
-- ✅ 测试管理目录
-- ✅ 总结复盘目录
-- ✅ 部署运维目录
-- ✅ 变更记录目录
+一键完成所有初始化工作，自动执行以下步骤：
+- ✅ 初始化 docs 目录（复制模板）
+- ✅ 分析项目类型和技术栈
+- ✅ 生成 AGENTS.md 配置文件
+- ✅ 自动扫描项目模块结构
+- ✅ 根据项目框架自动生成前后端开发文档
+- ✅ 更新 VitePress 侧边栏配置
+- ✅ 更新进度表格
 
-### 2. 项目分析 (`analyze-project`)
+**使用场景**:
+- 新项目启动时
+- 需要快速建立文档体系时
+- 首次调用此 skill 时
 
-自动分析项目特征，生成 `AGENTS.md` 配置文件：
-- 🔍 **项目类型识别**: 前端/后端/全栈/Monorepo
-- 🔍 **技术栈检测**: 框架、构建工具、包管理、UI 框架
-- 🔍 **目录结构分析**: 扫描并识别模块组织方式
-- 🔍 **命名规范分析**: 文件命名、组件命名、代码风格
-
-### 3. 文档模板调用
-
-根据不同类型的开发活动，自动调用对应模板：
-- 📝 **前端开发**: 参考 `001-前端模块开发模板.md`
-- 📝 **后端开发**: 参考 `002-后端模块开发模板.md`
-- 📝 **Bug 跟踪**: 参考 `003-Bug 模板.md`
-- 📝 **总结复盘**: 参考 `004-总结模板.md`
-- 📝 **测试管理**: 参考 `005-测试模板.md`
-
-### 4. 自动更新 VitePress 配置 ⭐ 新增
+### 2. 自动更新 VitePress 配置
 
 **命令**: `update-vitepress-config`
 
@@ -86,7 +69,7 @@ usage_notes: |
 - ⚙️ 更新 `.vitepress/config.ts` 中的 sidebar 配置
 - 🔄 保持侧边栏与文档同步
 
-### 5. 自动更新进度表格 ⭐ 新增
+### 3. 自动更新进度表格
 
 **命令**: `update-index-files`
 
@@ -121,11 +104,10 @@ docs/
 
 ### 新项目启动
 
-1. 调用 `init-docs` 命令初始化 docs 目录
-2. 调用 `analyze-project` 命令生成 AGENTS.md
-3. 阅读 docs/01-文档规范/了解文档编写规范
-4. 阅读 docs/02-模板中心/了解各类文档模板
-5. 开始编写开发文档
+1. 调用 `auto-init` 命令一键完成智能初始化
+2. 阅读 docs/01-文档规范/了解文档编写规范
+3. 阅读 docs/02-模板中心/了解各类文档模板
+4. 开始编写开发文档
 
 ### 日常开发
 

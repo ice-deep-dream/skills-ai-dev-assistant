@@ -5,7 +5,7 @@
 ### 每次对话的标准流程
 
 ```
-1. 调用 ai-dev-assistant skill
+1. 首次使用调用 auto-init 命令完成智能初始化
    ↓
 2. 说明当前任务（开发新功能/修复 Bug/写测试等）
    ↓
@@ -22,19 +22,21 @@
 
 ## 🚀 场景 1: 新项目启动
 
-### 步骤 1: 初始化项目
+### 步骤 1: 智能初始化
 
 ```
 用户：帮我初始化新项目
 AI: [调用 ai-dev-assistant skill]
-      1. 执行 init-docs 命令
-      2. 执行 analyze-project 命令
+      执行 auto-init 命令
 ```
 
 **执行结果**:
 - ✅ docs 目录已创建
 - ✅ AGENTS.md 已生成
 - ✅ 项目分析完成
+- ✅ 自动检测模块并生成开发文档
+- ✅ VitePress 配置已更新
+- ✅ 进度表格已更新
 
 ### 步骤 2: 开始第一个模块开发
 
@@ -43,6 +45,8 @@ AI: [调用 ai-dev-assistant skill]
 AI: [调用 ai-dev-assistant skill]
       1. 参考 docs/02-模板中心/001-前端模块开发模板.md
       2. 创建 docs/03-前端开发与计划/001-用户管理模块开发.md
+      3. 执行 update-vitepress-config 命令
+      4. 执行 update-index-files 命令
 ```
 
 **创建的文档**:
@@ -66,18 +70,6 @@ created: 2024-01-01
 ## 模块目标
 实现用户管理相关功能...
 ```
-
-### 步骤 3: 更新配置
-
-```
-AI: [调用 ai-dev-assistant skill]
-      1. 执行 update-vitepress-config 命令
-      2. 执行 update-index-files 命令
-```
-
-**执行结果**:
-- ✅ VitePress 侧边栏已更新（包含新文档链接）
-- ✅ 前端开发进度表格已更新
 
 ---
 

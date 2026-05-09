@@ -15,16 +15,8 @@
   ],
   "commands": [
     {
-      "name": "init-docs",
-      "description": "初始化 docs 目录，复制模板到项目根目录"
-    },
-    {
-      "name": "analyze-project",
-      "description": "分析项目并生成 AGENTS.md 文件"
-    },
-    {
-      "name": "create-module-doc",
-      "description": "创建模块开发文档（前端/后端）"
+      "name": "auto-init",
+      "description": "智能初始化 - 自动完成 docs 初始化、项目分析、模块文档生成、配置更新（推荐）"
     },
     {
       "name": "create-bug-doc",
