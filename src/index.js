@@ -1,9 +1,17 @@
 /**
  * AI 开发助手 Skill v2.0
  * 辅助 AI 进行开发文档编写
- * - 自动填充通用工具信息
- * - 简化目录结构
- * - 自动记录机制
+ *
+ * 核心功能：
+ * 1. 项目初始化 (project-init) - 新项目启动时自动执行
+ * 2. 模块开发流程：
+ *    - module-start: 模块启动（需求确认 → 计划 → 文档）
+ *    - module-complete: 模块完成（更新状态 → 更新目录）
+ *    - module-update: 开发过程（更新文档内容）
+ * 3. 按需文档（用户明确要求时）：
+ *    - create-bug-doc: Bug 跟踪文档
+ *    - create-summary-doc: 总结复盘文档
+ *    - create-test-doc: 测试文档
  */
 
 const fs = require('fs');
@@ -35,9 +43,13 @@ function copyDir(src, dest) {
   }
 }
 
+// ============================================
+// 功能一：项目初始化
+// ============================================
+
 /**
  * 命令：初始化 docs 目录
- * 将模板 docs-new 复制到项目根目录
+ * 将模板 docs 复制到项目根目录
  */
 async function initDocs(projectRoot) {
   const targetDocsPath = path.join(projectRoot, 'docs');
@@ -111,6 +123,7 @@ async function analyzeProject(projectRoot) {
   template = template.replace('{组件命名规范}', namingConvention.componentNaming);
   template = template.replace('{模块组织方式}', namingConvention.moduleOrganization);
   template = template.replace('{开发模式描述}', getDevelopmentModeDescription(projectType, techStack));
+  template = template.replace('{更新日期}', new Date().toISOString().split('T')[0]);
 
   // 写入文件
   fs.writeFileSync(agentsFile, template, 'utf-8');
@@ -157,246 +170,10 @@ async function scanProjectTools(projectRoot, docsPath) {
 }
 
 /**
- * 扫描前端通用工具
+ * 项目初始化命令：初始化 docs + 分析项目 + 扫描通用工具 + 更新模板
  */
-async function scanFrontendTools(projectRoot, docsPath, analysis) {
-  console.log('  扫描前端工具...');
-
-  const templatePath = path.join(docsPath, '01-模板中心', '前端开发模板.md');
-  if (!fs.existsSync(templatePath)) {
-    console.warn('  ⚠️ 前端开发模板不存在');
-    return;
-  }
-
-  let template = fs.readFileSync(templatePath, 'utf-8');
-
-  // 扫描 API 请求封装
-  const apiInfo = scanApiRequest(projectRoot, analysis);
-  if (apiInfo) {
-    template = template.replace('【初始化时自动检测】', apiInfo.path);
-    template = template.replace('// 【初始化时根据项目实际代码生成】', apiInfo.code);
-  }
-
-  // 扫描状态管理
-  const storeInfo = scanStore(projectRoot, analysis);
-  if (storeInfo) {
-    template = template.replace('【初始化时自动检测项目目录结构】',
-      `检测到 ${storeInfo.type} 状态管理`);
-  }
-
-  // 扫描通用组件
-  const components = scanCommonComponents(projectRoot);
-  if (components.length > 0) {
-    const componentTable = components.map(c => `| ${c.name} | ${c.usage} | \`${c.example}\` |`).join('\n');
-    template = template.replace('| 【自动扫描填充】 | 【用途说明】 | 【使用示例】 |', componentTable);
-  }
-
-  // 扫描工具函数
-  const utils = scanUtils(projectRoot);
-  if (utils.length > 0) {
-    const utilsTable = utils.map(u => `| ${u.name} | ${u.usage} | \`${u.example}\` |`).join('\n');
-    template = template.replace('| 【自动扫描填充】 | 【用途说明】 | 【使用示例】 |', utilsTable);
-  }
-
-  fs.writeFileSync(templatePath, template, 'utf-8');
-  console.log('  ✓ 前端模板更新完成');
-}
-
-/**
- * 扫描后端通用工具
- */
-async function scanBackendTools(projectRoot, docsPath, analysis) {
-  console.log('  扫描后端工具...');
-
-  const templatePath = path.join(docsPath, '01-模板中心', '后端开发模板.md');
-  if (!fs.existsSync(templatePath)) {
-    console.warn('  ⚠️ 后端开发模板不存在');
-    return;
-  }
-
-  let template = fs.readFileSync(templatePath, 'utf-8');
-
-  // 扫描 API 返回封装
-  const responseInfo = scanApiResponse(projectRoot, analysis);
-  if (responseInfo) {
-    template = template.replace('【初始化时自动检测】', responseInfo.path);
-  }
-
-  // 扫描分页工具
-  const paginationInfo = scanPagination(projectRoot, analysis);
-  if (paginationInfo) {
-    template = template.replace('【封装位置】：`【初始化时自动检测】`',
-      `【封装位置】：\`${paginationInfo.path}\``);
-  }
-
-  // 扫描中间件
-  const middlewares = scanMiddlewares(projectRoot);
-  if (middlewares.length > 0) {
-    const middlewareTable = middlewares.map(m => `| ${m.name} | ${m.usage} |`).join('\n');
-    console.log('  ✓ 检测到中间件:', middlewares.map(m => m.name).join(', '));
-  }
-
-  fs.writeFileSync(templatePath, template, 'utf-8');
-  console.log('  ✓ 后端模板更新完成');
-}
-
-/**
- * 扫描 API 请求封装
- */
-function scanApiRequest(projectRoot, analysis) {
-  const possiblePaths = [
-    'src/utils/request.ts',
-    'src/utils/request.js',
-    'src/api/request.ts',
-    'src/api/request.js',
-    'src/http/request.ts',
-    'src/http/request.js',
-  ];
-
-  for (const p of possiblePaths) {
-    const fullPath = path.join(projectRoot, p);
-    if (fs.existsSync(fullPath)) {
-      const content = fs.readFileSync(fullPath, 'utf-8');
-      return {
-        path: p,
-        code: content.slice(0, 500) // 取前500字符作为示例
-      };
-    }
-  }
-  return null;
-}
-
-/**
- * 扫描状态管理
- */
-function scanStore(projectRoot, analysis) {
-  if (fs.existsSync(path.join(projectRoot, 'src/store'))) {
-    if (fs.existsSync(path.join(projectRoot, 'src/stores'))) {
-      return { type: 'Pinia' };
-    }
-    return { type: 'Vuex' };
-  }
-  return null;
-}
-
-/**
- * 扫描通用组件
- */
-function scanCommonComponents(projectRoot) {
-  const components = [];
-  const componentsPath = path.join(projectRoot, 'src/components');
-
-  if (fs.existsSync(componentsPath)) {
-    const entries = fs.readdirSync(componentsPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        components.push({
-          name: entry.name,
-          usage: `通用${entry.name}组件`,
-          example: `<${entry.name} />`
-        });
-      }
-    }
-  }
-
-  return components.slice(0, 5); // 最多返回5个
-}
-
-/**
- * 扫描工具函数
- */
-function scanUtils(projectRoot) {
-  const utils = [];
-  const utilsPath = path.join(projectRoot, 'src/utils');
-
-  if (fs.existsSync(utilsPath)) {
-    const entries = fs.readdirSync(utilsPath);
-    for (const entry of entries) {
-      if (entry.endsWith('.ts') || entry.endsWith('.js')) {
-        if (entry !== 'request.ts' && entry !== 'request.js') {
-          utils.push({
-            name: entry.replace(/\.(ts|js)$/, ''),
-            usage: '工具函数',
-            example: `import { xxx } from '@/utils/${entry.replace(/\.(ts|js)$/, '')}'`
-          });
-        }
-      }
-    }
-  }
-
-  return utils.slice(0, 5);
-}
-
-/**
- * 扫描 API 返回封装
- */
-function scanApiResponse(projectRoot, analysis) {
-  const possiblePaths = [
-    'src/common/response.ts',
-    'src/common/response.js',
-    'src/utils/response.ts',
-    'src/utils/response.js',
-    'src/helpers/response.ts',
-  ];
-
-  for (const p of possiblePaths) {
-    const fullPath = path.join(projectRoot, p);
-    if (fs.existsSync(fullPath)) {
-      return { path: p };
-    }
-  }
-  return null;
-}
-
-/**
- * 扫描分页工具
- */
-function scanPagination(projectRoot, analysis) {
-  const possiblePaths = [
-    'src/common/utils/pagination.ts',
-    'src/utils/pagination.ts',
-    'src/helpers/pagination.ts',
-  ];
-
-  for (const p of possiblePaths) {
-    const fullPath = path.join(projectRoot, p);
-    if (fs.existsSync(fullPath)) {
-      return { path: p };
-    }
-  }
-  return null;
-}
-
-/**
- * 扫描中间件
- */
-function scanMiddlewares(projectRoot) {
-  const middlewares = [];
-  const middlewarePaths = ['src/middleware', 'src/middlewares'];
-
-  for (const p of middlewarePaths) {
-    const fullPath = path.join(projectRoot, p);
-    if (fs.existsSync(fullPath)) {
-      const entries = fs.readdirSync(fullPath);
-      for (const entry of entries) {
-        if (entry.endsWith('.ts') || entry.endsWith('.js')) {
-          middlewares.push({
-            name: entry.replace(/\.(ts|js)$/, ''),
-            usage: '中间件'
-          });
-        }
-      }
-    }
-  }
-
-  return middlewares;
-}
-
-/**
- * 智能初始化命令：初始化 docs + 分析项目 + 扫描通用工具 + 更新模板
- */
-async function autoInit(projectRoot) {
-  console.log('🚀 开始智能初始化...');
+async function projectInit(projectRoot) {
+  console.log('🚀 开始项目初始化...');
   console.log('='.repeat(50));
 
   const results = {
@@ -438,7 +215,7 @@ async function autoInit(projectRoot) {
     }
 
     console.log('\n' + '='.repeat(50));
-    console.log('✅ 智能初始化完成！');
+    console.log('✅ 项目初始化完成！');
     console.log(`📁 docs 目录：${results.docsInit.targetPath}`);
     console.log(`📋 AGENTS.md：${results.projectAnalysis.filePath}`);
     console.log('📝 已更新模板通用工具信息');
@@ -446,293 +223,517 @@ async function autoInit(projectRoot) {
 
     return {
       success: true,
-      message: '智能初始化完成',
+      message: '项目初始化完成',
       results
     };
 
   } catch (error) {
-    console.error('❌ 智能初始化失败：', error.message);
+    console.error('❌ 项目初始化失败：', error.message);
     throw error;
   }
 }
 
-/**
- * 分析项目类型
- */
-function analyzeProjectType(projectRoot) {
-  const packageJsonPath = path.join(projectRoot, 'package.json');
-  const hasFrontend = fs.existsSync(packageJsonPath);
-
-  const hasBackend =
-    fs.existsSync(path.join(projectRoot, 'server')) ||
-    fs.existsSync(path.join(projectRoot, 'api')) ||
-    fs.existsSync(path.join(projectRoot, 'backend'));
-
-  const isMonorepo =
-    fs.existsSync(path.join(projectRoot, 'packages')) ||
-    fs.existsSync(path.join(projectRoot, 'apps'));
-
-  if (isMonorepo) {
-    return 'monorepo';
-  } else if (hasFrontend && hasBackend) {
-    return 'fullstack';
-  } else if (hasFrontend) {
-    return 'frontend';
-  } else if (hasBackend) {
-    return 'backend';
-  }
-
-  return 'unknown';
-}
+// ============================================
+// 功能二：模块开发流程
+// ============================================
 
 /**
- * 分析技术栈
+ * 模块启动：创建新模块开发计划
+ * 流程：需求确认 → 计划 → 文档 → 更新配置
  */
-function analyzeTechStack(projectRoot) {
-  const techStack = {
-    framework: null,
-    buildTool: null,
-    packageManager: null,
-    language: null,
-    ui: null
-  };
+async function moduleStart(projectRoot, options) {
+  const {
+    moduleName,
+    moduleType = 'frontend', // frontend | backend
+    description = '',
+    requirements = [],
+    plan = '',
+    owner = 'developer'
+  } = options;
 
-  const packageJsonPath = path.join(projectRoot, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+  console.log(`🚀 开始模块启动：${moduleName}`);
+  console.log('='.repeat(50));
 
-    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+  const docsPath = path.join(projectRoot, 'docs');
 
-    if (deps['vue']) techStack.framework = 'Vue';
-    else if (deps['react']) techStack.framework = 'React';
-    else if (deps['angular']) techStack.framework = 'Angular';
-    else if (deps['svelte']) techStack.framework = 'Svelte';
-    else if (deps['next']) techStack.framework = 'Next.js';
-    else if (deps['nuxt']) techStack.framework = 'Nuxt.js';
-
-    if (deps['vite']) techStack.buildTool = 'Vite';
-    else if (deps['webpack']) techStack.buildTool = 'Webpack';
-
-    if (deps['element-plus']) techStack.ui = 'Element Plus';
-    else if (deps['antd']) techStack.ui = 'Ant Design';
-    else if (deps['tailwindcss']) techStack.ui = 'Tailwind CSS';
+  // 检查 docs 目录是否存在
+  if (!fs.existsSync(docsPath)) {
+    console.log('docs 目录不存在，先执行项目初始化...');
+    await projectInit(projectRoot);
   }
 
-  if (fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'))) {
-    techStack.packageManager = 'pnpm';
-  } else if (fs.existsSync(path.join(projectRoot, 'yarn.lock'))) {
-    techStack.packageManager = 'yarn';
-  } else {
-    techStack.packageManager = 'npm';
-  }
-
-  if (fs.existsSync(path.join(projectRoot, 'tsconfig.json'))) {
-    techStack.language = 'TypeScript';
-  } else {
-    techStack.language = 'JavaScript';
-  }
-
-  return techStack;
-}
-
-/**
- * 分析目录结构
- */
-function analyzeDirectoryStructure(projectRoot) {
-  const structure = [];
-
-  try {
-    const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-        structure.push({
-          name: entry.name,
-          type: 'directory'
-        });
-      } else if (entry.isFile() && !entry.name.startsWith('.')) {
-        structure.push({
-          name: entry.name,
-          type: 'file'
-        });
-      }
-    }
-  } catch (error) {
-    console.error('分析目录结构失败:', error);
-  }
-
-  return structure;
-}
-
-/**
- * 分析命名规范
- */
-function analyzeNamingConvention(projectRoot) {
-  const convention = {
-    fileNaming: 'kebab-case',
-    componentNaming: 'PascalCase',
-    moduleOrganization: 'by-feature'
-  };
-
-  const srcPath = path.join(projectRoot, 'src');
-  if (fs.existsSync(srcPath)) {
-    const srcEntries = fs.readdirSync(srcPath, { withFileTypes: true });
-
-    const componentsPath = path.join(srcPath, 'components');
-    if (fs.existsSync(componentsPath)) {
-      const components = fs.readdirSync(componentsPath);
-
-      const hasPascalCase = components.some(c => /^[A-Z]/.test(c));
-      const hasKebabCase = components.some(c => /-/.test(c));
-
-      if (hasPascalCase && !hasKebabCase) {
-        convention.componentNaming = 'PascalCase';
-      } else if (hasKebabCase) {
-        convention.componentNaming = 'kebab-case';
-      }
-    }
-  }
-
-  return convention;
-}
-
-/**
- * 旧版 AGENTS.md 生成逻辑（向后兼容）
- */
-async function analyzeProjectLegacy(projectRoot) {
-  const agentsFile = path.join(projectRoot, 'AGENTS.md');
-
-  const projectType = analyzeProjectType(projectRoot);
-  const techStack = analyzeTechStack(projectRoot);
-  const dirStructure = analyzeDirectoryStructure(projectRoot);
-  const namingConvention = analyzeNamingConvention(projectRoot);
-
-  const content = generateAgentsContent({
-    projectType,
-    techStack,
-    dirStructure,
-    namingConvention
+  // 1. 创建模块文档
+  console.log('\n📝 创建模块开发文档...');
+  const docResult = await createModuleDoc(docsPath, {
+    type: moduleType,
+    moduleName,
+    description,
+    requirements,
+    plan,
+    owner
   });
 
-  fs.writeFileSync(agentsFile, content, 'utf-8');
+  // 2. 更新 VitePress 配置
+  console.log('\n⚙️ 更新 VitePress 配置...');
+  await updateVitePressConfig(docsPath);
 
-  console.log('✓ AGENTS.md 生成完成');
-  console.log(`✓ 文件位置：${agentsFile}`);
+  // 3. 更新进度表格
+  console.log('\n📊 更新进度表格...');
+  await updateIndexFiles(docsPath);
+
+  console.log('\n' + '='.repeat(50));
+  console.log('✅ 模块启动完成！');
+  console.log(`📄 开发文档：${docResult.filePath}`);
+  console.log('='.repeat(50));
 
   return {
     success: true,
-    message: 'AGENTS.md 生成完成',
-    filePath: agentsFile,
-    analysis: {
-      projectType,
-      techStack,
-      dirStructure,
-      namingConvention
-    }
+    message: '模块启动完成',
+    docPath: docResult.filePath
   };
 }
 
 /**
- * 生成 AGENTS.md 内容
+ * 模块完成：更新模块状态为完成
+ * 流程：更新状态 → 更新进度 → 更新配置
  */
-function generateAgentsContent(analysis) {
-  const { projectType, techStack, dirStructure, namingConvention } = analysis;
+async function moduleComplete(projectRoot, moduleName) {
+  console.log(`🎉 模块完成：${moduleName}`);
+  console.log('='.repeat(50));
 
-  return `# AI 开发助手 - 项目配置文件
+  const docsPath = path.join(projectRoot, 'docs');
+  const devPlanPath = path.join(docsPath, '02-开发计划');
 
-## 项目类型
+  // 查找模块文档
+  const files = fs.readdirSync(devPlanPath).filter(f =>
+    f.endsWith('.md') && f !== 'index.md' && f.includes(moduleName)
+  );
 
-${getProjectTypeDescription(projectType)}
+  if (files.length === 0) {
+    throw new Error(`未找到模块文档：${moduleName}`);
+  }
 
-## 技术栈
+  const filePath = path.join(devPlanPath, files[0]);
+  let content = fs.readFileSync(filePath, 'utf-8');
+  const today = new Date().toISOString().split('T')[0];
 
-- **框架**: ${techStack.framework || '未检测到'}
-- **构建工具**: ${techStack.buildTool || '未检测到'}
-- **包管理工具**: ${techStack.packageManager || 'npm'}
-- **语言**: ${techStack.language || 'JavaScript'}
-- **UI 框架**: ${techStack.ui || '未使用'}
+  // 更新 frontmatter
+  content = content.replace(/status:\s*\w+/, 'status: completed');
+  content = content.replace(/progress:\s*\d+/, 'progress: 100');
+  content = content.replace(/updated:\s*[\d-]+/, `updated: ${today}`);
 
-## 目录结构特点
+  // 添加完成记录
+  const updateRecordRegex = /\| 日期 \| 内容 \| 更新人 \|[\s\S]*?(?=\n\n|---|$)/;
+  const newRecord = `| ${today} | 模块开发完成 | - |`;
 
-${getDirectoryStructureDescription(dirStructure)}
+  if (updateRecordRegex.test(content)) {
+    content = content.replace(updateRecordRegex, (match) => {
+      return match.trim() + `\n${newRecord}`;
+    });
+  }
 
-## 命名规范
+  fs.writeFileSync(filePath, content, 'utf-8');
+  console.log(`✓ 已更新文档状态：${files[0]}`);
 
-- **文件命名**: ${namingConvention.fileNaming}
-- **组件命名**: ${namingConvention.componentNaming}
-- **模块组织**: ${namingConvention.moduleOrganization}
+  // 更新进度表格
+  await updateIndexFiles(docsPath);
 
-## 使用说明
+  // 更新 VitePress 配置
+  await updateVitePressConfig(docsPath);
 
-### 每次对话前
+  console.log('\n' + '='.repeat(50));
+  console.log('✅ 模块完成处理完成！');
+  console.log('='.repeat(50));
 
-1. **必须调用本 skill**
-2. 确保 docs 文档已初始化
-3. 按照文档模板编写开发文档
+  return {
+    success: true,
+    message: '模块完成处理完成',
+    filePath
+  };
+}
 
-### docs 文档目录使用说明
+/**
+ * 模块更新：开发过程中更新文档内容
+ * 流程：更新内容 → 更新进度
+ */
+async function moduleUpdate(projectRoot, moduleName, updates) {
+  console.log(`📝 模块更新：${moduleName}`);
+
+  const docsPath = path.join(projectRoot, 'docs');
+  const devPlanPath = path.join(docsPath, '02-开发计划');
+
+  // 查找模块文档
+  const files = fs.readdirSync(devPlanPath).filter(f =>
+    f.endsWith('.md') && f !== 'index.md' && f.includes(moduleName)
+  );
+
+  if (files.length === 0) {
+    throw new Error(`未找到模块文档：${moduleName}`);
+  }
+
+  const filePath = path.join(devPlanPath, files[0]);
+  let content = fs.readFileSync(filePath, 'utf-8');
+  const today = new Date().toISOString().split('T')[0];
+
+  // 更新 frontmatter
+  if (updates.status) {
+    content = content.replace(/status:\s*\w+/, `status: ${updates.status}`);
+  }
+  if (updates.progress !== undefined) {
+    content = content.replace(/progress:\s*\d+/, `progress: ${updates.progress}`);
+  }
+  content = content.replace(/updated:\s*[\d-]+/, `updated: ${today}`);
+
+  // 添加更新记录
+  if (updates.note) {
+    const updateRecordRegex = /\| 日期 \| 内容 \| 更新人 \|[\s\S]*?(?=\n\n|---|$)/;
+    const newRecord = `| ${today} | ${updates.note} | - |`;
+
+    if (updateRecordRegex.test(content)) {
+      content = content.replace(updateRecordRegex, (match) => {
+        return match.trim() + `\n${newRecord}`;
+      });
+    }
+  }
+
+  fs.writeFileSync(filePath, content, 'utf-8');
+  console.log(`✓ 已更新文档：${files[0]}`);
+
+  // 更新进度表格
+  await updateIndexFiles(docsPath);
+
+  return {
+    success: true,
+    message: '模块更新完成',
+    filePath
+  };
+}
+
+// ============================================
+// 功能三：按需文档
+// ============================================
+
+/**
+ * 创建 Bug 跟踪文档
+ */
+async function createBugDoc(projectRoot, options) {
+  const { title, description, priority = 'medium', steps = '', expected = '', actual = '' } = options;
+
+  console.log(`🐛 创建 Bug 文档：${title}`);
+
+  const docsPath = path.join(projectRoot, 'docs');
+  const trackPath = path.join(docsPath, '03-项目跟踪');
+
+  // 确保目录存在
+  if (!fs.existsSync(trackPath)) {
+    fs.mkdirSync(trackPath, { recursive: true });
+  }
+
+  // 生成文件名
+  const files = fs.readdirSync(trackPath).filter(f => f.startsWith('BUG-'));
+  const nextNum = files.length + 1;
+  const fileName = `BUG-${String(nextNum).padStart(3, '0')}-${title.replace(/\s+/g, '-')}.md`;
+  const filePath = path.join(trackPath, fileName);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const content = `---
+title: ${title}
+description: ${description}
+category: Bug
+tags:
+  - bug
+  - ${priority}
+status: new
+bugId: BUG-${String(nextNum).padStart(3, '0')}
+priority: ${priority}
+created: ${today}
+updated: ${today}
+---
+
+# ${title}
+
+## 问题描述
+
+${description}
+
+## 复现步骤
 
 \`\`\`
-docs/
-├── 01-模板中心/         # 开发模板（含通用工具信息）
-├── 02-开发计划/         # 前后端开发文档
-├── 03-项目跟踪/         # Bug/测试/总结/进度
-�`\`\`
+${steps || '待补充'}
+\`\`\`
 
-## 重要提醒
+## 预期结果
 
-⚠️ **每次对话必须调用本 skill**
-⚠️ **所有开发文档必须写入 docs 目录**
-⚠️ **必须按照模板格式编写文档**
+${expected || '待补充'}
+
+## 实际结果
+
+${actual || '待补充'}
+
+## 解决方案
+
+<!-- 记录解决方案 -->
+
+## 相关信息
+
+- **优先级**：${priority}
+- **状态**：新建
+- **创建时间**：${today}
 
 ---
 
-*最后更新：${new Date().toISOString().split('T')[0]}*
+*由 AI 开发助手自动生成*
 `;
+
+  fs.writeFileSync(filePath, content, 'utf-8');
+  console.log(`✓ Bug 文档已创建：${fileName}`);
+
+  // 更新配置
+  await updateVitePressConfig(docsPath);
+
+  return { success: true, filePath, fileName };
 }
 
-function getProjectTypeDescription(type) {
-  const descriptions = {
-    frontend: '前端项目 - 专注于用户界面和交互体验',
-    backend: '后端项目 - 提供 API 服务和数据处理',
-    fullstack: '全栈项目 - 同时包含前端和后端',
-    monorepo: 'Monorepo 项目 - 多个包/应用统一管理',
-    unknown: '未知类型 - 需要手动配置'
+/**
+ * 创建总结复盘文档
+ */
+async function createSummaryDoc(projectRoot, options) {
+  const { title, type = 'project', content: summaryContent = '' } = options;
+
+  console.log(`📋 创建总结文档：${title}`);
+
+  const docsPath = path.join(projectRoot, 'docs');
+  const trackPath = path.join(docsPath, '03-项目跟踪');
+
+  // 确保目录存在
+  if (!fs.existsSync(trackPath)) {
+    fs.mkdirSync(trackPath, { recursive: true });
+  }
+
+  // 生成文件名
+  const today = new Date();
+  const dateStr = today.toISOString().replace(/-/g, '').slice(0, 8);
+  const fileName = `总结-${dateStr}-${title.replace(/\s+/g, '-')}.md`;
+  const filePath = path.join(trackPath, fileName);
+
+  const content = `---
+title: ${title}
+description: ${type === 'project' ? '项目总结' : '模块总结'}
+category: 总结
+tags:
+  - 总结
+  - ${type}
+created: ${today.toISOString().split('T')[0]}
+---
+
+# ${title}
+
+## 背景
+
+<!-- 项目/模块背景 -->
+
+## 目标
+
+<!-- 预期目标 -->
+
+## 完成情况
+
+<!-- 实际完成情况 -->
+
+## 经验总结
+
+### 做得好的
+
+<!-- 值得保持的做法 -->
+
+### 需要改进的
+
+<!-- 需要改进的地方 -->
+
+### 下一步计划
+
+<!-- 后续计划 -->
+
+---
+
+${summaryContent}
+
+---
+
+*由 AI 开发助手自动生成*
+`;
+
+  fs.writeFileSync(filePath, content, 'utf-8');
+  console.log(`✓ 总结文档已创建：${fileName}`);
+
+  // 更新配置
+  await updateVitePressConfig(docsPath);
+
+  return { success: true, filePath, fileName };
+}
+
+/**
+ * 创建测试文档
+ */
+async function createTestDoc(projectRoot, options) {
+  const { title, testType = 'manual', moduleName = '', testCases = [] } = options;
+
+  console.log(`🧪 创建测试文档：${title}`);
+
+  const docsPath = path.join(projectRoot, 'docs');
+  const trackPath = path.join(docsPath, '03-项目跟踪');
+
+  // 确保目录存在
+  if (!fs.existsSync(trackPath)) {
+    fs.mkdirSync(trackPath, { recursive: true });
+  }
+
+  // 生成文件名
+  const files = fs.readdirSync(trackPath).filter(f => f.startsWith('TEST-'));
+  const nextNum = files.length + 1;
+  const fileName = `TEST-${String(nextNum).padStart(3, '0')}-${title.replace(/\s+/g, '-')}.md`;
+  const filePath = path.join(trackPath, fileName);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // 生成测试用例表格
+  const testCaseTable = testCases.length > 0
+    ? testCases.map((tc, i) => `| ${i + 1} | ${tc.name} | ${tc.steps || '待补充'} | ${tc.expected || '待补充'} | 待执行 |`).join('\n')
+    : '| 1 | 待补充 | 待补充 | 待补充 | 待执行 |';
+
+  const content = `---
+title: ${title}
+description: ${moduleName} 测试文档
+category: 测试
+tags:
+  - 测试
+  - ${testType}
+testType: ${testType}
+status: planning
+created: ${today}
+updated: ${today}
+---
+
+# ${title}
+
+## 测试范围
+
+${moduleName ? `模块：${moduleName}` : '待补充'}
+
+## 测试环境
+
+| 项目 | 说明 |
+|------|------|
+| 测试类型 | ${testType === 'manual' ? '手动测试' : '自动化测试'} |
+| 测试环境 | 待补充 |
+| 测试人员 | 待补充 |
+
+## 测试用例
+
+| 编号 | 用例名称 | 测试步骤 | 预期结果 | 状态 |
+|------|----------|----------|----------|------|
+${testCaseTable}
+
+## 测试结果
+
+<!-- 记录测试结果 -->
+
+## 问题记录
+
+<!-- 记录测试中发现的问题 -->
+
+---
+
+*由 AI 开发助手自动生成*
+`;
+
+  fs.writeFileSync(filePath, content, 'utf-8');
+  console.log(`✓ 测试文档已创建：${fileName}`);
+
+  // 更新配置
+  await updateVitePressConfig(docsPath);
+
+  return { success: true, filePath, fileName };
+}
+
+// ============================================
+// 辅助函数
+// ============================================
+
+/**
+ * 创建模块开发文档
+ */
+async function createModuleDoc(docsPath, options) {
+  const {
+    type = 'frontend',
+    moduleName,
+    description = '',
+    requirements = [],
+    plan = '',
+    owner = 'developer'
+  } = options;
+
+  console.log(`开始创建${type === 'frontend' ? '前端' : '后端'}模块文档...`);
+  console.log(`模块名称：${moduleName}`);
+
+  // 目标目录
+  const targetDir = path.join(docsPath, '02-开发计划');
+  const templateFile = path.join(docsPath, '01-模板中心',
+    type === 'frontend' ? '前端开发模板.md' : '后端开发模板.md');
+
+  // 检查目录是否存在
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  // 检查模板是否存在
+  if (!fs.existsSync(templateFile)) {
+    throw new Error(`模板文件不存在：${templateFile}`);
+  }
+
+  // 读取模板
+  let template = fs.readFileSync(templateFile, 'utf-8');
+
+  // 生成文件名（自动编号）
+  const files = fs.readdirSync(targetDir).filter(f => f.endsWith('.md') && f !== 'index.md');
+  const nextNum = files.length + 1;
+  const fileName = `${String(nextNum).padStart(3, '0')}-${moduleName}开发.md`;
+  const filePath = path.join(targetDir, fileName);
+
+  // 替换模板中的占位符
+  const today = new Date().toISOString().split('T')[0];
+  template = template.replace(/【模块名称】/g, moduleName);
+  template = template.replace(/【负责人】/g, owner);
+  template = template.replace(/【日期】/g, today);
+
+  // 添加需求清单
+  if (requirements.length > 0) {
+    const reqList = requirements.map(r => `- [ ] ${r}`).join('\n');
+    template = template.replace(/- \[ \] 【功能\d+】/g, '');
+    template = template.replace(
+      '**功能清单**：',
+      `**功能清单**：\n${reqList}`
+    );
+  }
+
+  // 添加开发计划
+  if (plan) {
+    template += `\n\n## 开发计划\n\n${plan}\n`;
+  }
+
+  // 写入文件
+  fs.writeFileSync(filePath, template, 'utf-8');
+
+  console.log(`✓ 模块文档创建完成`);
+  console.log(`✓ 文件位置：${filePath}`);
+
+  return {
+    success: true,
+    message: '模块文档创建完成',
+    filePath,
+    fileName
   };
-  return descriptions[type] || descriptions.unknown;
-}
-
-function getDirectoryStructureDescription(structure) {
-  if (!structure || structure.length === 0) {
-    return '未检测到目录结构';
-  }
-
-  const dirs = structure.filter(s => s.type === 'directory').map(s => s.name);
-  const files = structure.filter(s => s.type === 'file').map(s => s.name);
-
-  let desc = '```\n';
-  if (dirs.length > 0) {
-    desc += '目录:\n';
-    dirs.forEach(d => desc += `  - ${d}/\n`);
-  }
-  if (files.length > 0) {
-    desc += '文件:\n';
-    files.forEach(f => desc += `  - ${f}\n`);
-  }
-  desc += '```';
-
-  return desc;
-}
-
-function getDevelopmentModeDescription(projectType, techStack) {
-  if (projectType === 'frontend' || projectType === 'fullstack') {
-    return `基于 ${techStack.framework || 'Vue'} + ${techStack.buildTool || 'Vite'} 的现代前端开发模式`;
-  } else if (projectType === 'backend') {
-    return '后端 API 服务开发模式';
-  } else if (projectType === 'monorepo') {
-    return 'Monorepo 多包管理模式';
-  }
-  return '标准开发模式';
 }
 
 /**
@@ -755,7 +756,7 @@ async function updateVitePressConfig(docsPath) {
   const sidebarItems = [];
   const docsEntries = fs.readdirSync(docsPath, { withFileTypes: true });
 
-  // 定义目录顺序和名称映射（新结构）
+  // 定义目录顺序和名称映射
   const dirConfig = {
     '01-模板中心': { text: '模板中心', collapsed: false },
     '02-开发计划': { text: '开发计划', collapsed: true },
@@ -781,7 +782,6 @@ async function updateVitePressConfig(docsPath) {
       .sort();
 
     for (const file of files) {
-      const filePath = path.join(dirName, file);
       const link = `/${path.posix.join(dirName, file).replace('.md', '')}`;
 
       // 读取文件 Frontmatter 获取标题
@@ -909,7 +909,7 @@ async function updateIndexFiles(docsPath) {
   let indexContent = fs.readFileSync(indexFile, 'utf-8');
 
   // 替换或添加进度表格
-  const tableRegex = /\| 模块 \| 状态 \| 进度 \| 负责人 \| 开始时间 \| 完成时间 \|\n\|---\|---\|---\|---\|---\|---\|\n([\s\S]*?)(?=\n\n|\n$|$)/;
+  const tableRegex = /\| 模块 \| 状态 \| 进度 \| 负责人 \| 开始时间 \| 完成时间 \|[\s\S]*?(?=\n\n|---|$)/;
   const newTable = `| 模块 | 状态 | 进度 | 负责人 | 开始时间 | 完成时间 |
 |---|---|---|---|---|---|
 ${tableRows || '| - | - | - | - | - | - |'}`;
@@ -930,68 +930,509 @@ ${tableRows || '| - | - | - | - | - | - |'}`;
   };
 }
 
-/**
- * 创建模块开发文档
- */
-async function createModuleDoc(docsPath, options) {
-  const { type, moduleName, description = '', owner = 'developer' } = options;
+// ============================================
+// 项目分析辅助函数
+// ============================================
 
-  console.log(`开始创建${type === 'frontend' ? '前端' : '后端'}模块文档...`);
-  console.log(`模块名称：${moduleName}`);
+function analyzeProjectType(projectRoot) {
+  const packageJsonPath = path.join(projectRoot, 'package.json');
+  const hasFrontend = fs.existsSync(packageJsonPath);
 
-  // 目标目录（合并为开发计划目录）
-  const targetDir = path.join(docsPath, '02-开发计划');
-  const templateFile = path.join(docsPath, '01-模板中心',
-    type === 'frontend' ? '前端开发模板.md' : '后端开发模板.md');
+  const hasBackend =
+    fs.existsSync(path.join(projectRoot, 'server')) ||
+    fs.existsSync(path.join(projectRoot, 'api')) ||
+    fs.existsSync(path.join(projectRoot, 'backend'));
 
-  // 检查目录是否存在
-  if (!fs.existsSync(targetDir)) {
-    fs.mkdirSync(targetDir, { recursive: true });
+  const isMonorepo =
+    fs.existsSync(path.join(projectRoot, 'packages')) ||
+    fs.existsSync(path.join(projectRoot, 'apps'));
+
+  if (isMonorepo) {
+    return 'monorepo';
+  } else if (hasFrontend && hasBackend) {
+    return 'fullstack';
+  } else if (hasFrontend) {
+    return 'frontend';
+  } else if (hasBackend) {
+    return 'backend';
   }
 
-  // 检查模板是否存在
-  if (!fs.existsSync(templateFile)) {
-    throw new Error(`模板文件不存在：${templateFile}`);
+  return 'unknown';
+}
+
+function analyzeTechStack(projectRoot) {
+  const techStack = {
+    framework: null,
+    buildTool: null,
+    packageManager: null,
+    language: null,
+    ui: null
+  };
+
+  const packageJsonPath = path.join(projectRoot, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+
+    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+
+    if (deps['vue']) techStack.framework = 'Vue';
+    else if (deps['react']) techStack.framework = 'React';
+    else if (deps['angular']) techStack.framework = 'Angular';
+    else if (deps['svelte']) techStack.framework = 'Svelte';
+    else if (deps['next']) techStack.framework = 'Next.js';
+    else if (deps['nuxt']) techStack.framework = 'Nuxt.js';
+
+    if (deps['vite']) techStack.buildTool = 'Vite';
+    else if (deps['webpack']) techStack.buildTool = 'Webpack';
+
+    if (deps['element-plus']) techStack.ui = 'Element Plus';
+    else if (deps['antd']) techStack.ui = 'Ant Design';
+    else if (deps['tailwindcss']) techStack.ui = 'Tailwind CSS';
   }
 
-  // 读取模板
-  let template = fs.readFileSync(templateFile, 'utf-8');
+  if (fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'))) {
+    techStack.packageManager = 'pnpm';
+  } else if (fs.existsSync(path.join(projectRoot, 'yarn.lock'))) {
+    techStack.packageManager = 'yarn';
+  } else {
+    techStack.packageManager = 'npm';
+  }
 
-  // 生成文件名（自动编号）
-  const files = fs.readdirSync(targetDir).filter(f => f.endsWith('.md') && f !== 'index.md');
-  const nextNum = files.length + 1;
-  const fileName = `${String(nextNum).padStart(3, '0')}-${moduleName}开发.md`;
-  const filePath = path.join(targetDir, fileName);
+  if (fs.existsSync(path.join(projectRoot, 'tsconfig.json'))) {
+    techStack.language = 'TypeScript';
+  } else {
+    techStack.language = 'JavaScript';
+  }
 
-  // 替换模板中的占位符
-  const today = new Date().toISOString().split('T')[0];
-  template = template.replace(/【模块名称】/g, moduleName);
-  template = template.replace(/【负责人】/g, owner);
-  template = template.replace(/【日期】/g, today);
-  template = template.replace(/【日期】/g, today);
+  return techStack;
+}
 
-  // 写入文件
-  fs.writeFileSync(filePath, template, 'utf-8');
+function analyzeDirectoryStructure(projectRoot) {
+  const structure = [];
 
-  console.log(`✓ 模块文档创建完成`);
-  console.log(`✓ 文件位置：${filePath}`);
+  try {
+    const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+        structure.push({
+          name: entry.name,
+          type: 'directory'
+        });
+      } else if (entry.isFile() && !entry.name.startsWith('.')) {
+        structure.push({
+          name: entry.name,
+          type: 'file'
+        });
+      }
+    }
+  } catch (error) {
+    console.error('分析目录结构失败:', error);
+  }
+
+  return structure;
+}
+
+function analyzeNamingConvention(projectRoot) {
+  const convention = {
+    fileNaming: 'kebab-case',
+    componentNaming: 'PascalCase',
+    moduleOrganization: 'by-feature'
+  };
+
+  const srcPath = path.join(projectRoot, 'src');
+  if (fs.existsSync(srcPath)) {
+    const srcEntries = fs.readdirSync(srcPath, { withFileTypes: true });
+
+    const componentsPath = path.join(srcPath, 'components');
+    if (fs.existsSync(componentsPath)) {
+      const components = fs.readdirSync(componentsPath);
+
+      const hasPascalCase = components.some(c => /^[A-Z]/.test(c));
+      const hasKebabCase = components.some(c => /-/.test(c));
+
+      if (hasPascalCase && !hasKebabCase) {
+        convention.componentNaming = 'PascalCase';
+      } else if (hasKebabCase) {
+        convention.componentNaming = 'kebab-case';
+      }
+    }
+  }
+
+  return convention;
+}
+
+async function analyzeProjectLegacy(projectRoot) {
+  const agentsFile = path.join(projectRoot, 'AGENTS.md');
+
+  const projectType = analyzeProjectType(projectRoot);
+  const techStack = analyzeTechStack(projectRoot);
+  const dirStructure = analyzeDirectoryStructure(projectRoot);
+  const namingConvention = analyzeNamingConvention(projectRoot);
+
+  const content = generateAgentsContent({
+    projectType,
+    techStack,
+    dirStructure,
+    namingConvention
+  });
+
+  fs.writeFileSync(agentsFile, content, 'utf-8');
+
+  console.log('✓ AGENTS.md 生成完成');
+  console.log(`✓ 文件位置：${agentsFile}`);
 
   return {
     success: true,
-    message: '模块文档创建完成',
-    filePath,
-    fileName
+    message: 'AGENTS.md 生成完成',
+    filePath: agentsFile,
+    analysis: {
+      projectType,
+      techStack,
+      dirStructure,
+      namingConvention
+    }
   };
+}
+
+function generateAgentsContent(analysis) {
+  const { projectType, techStack, dirStructure, namingConvention } = analysis;
+
+  return `# AI 开发助手 - 项目配置文件
+
+## 项目类型
+
+${getProjectTypeDescription(projectType)}
+
+## 技术栈
+
+- **框架**: ${techStack.framework || '未检测到'}
+- **构建工具**: ${techStack.buildTool || '未检测到'}
+- **包管理工具**: ${techStack.packageManager || 'npm'}
+- **语言**: ${techStack.language || 'JavaScript'}
+- **UI 框架**: ${techStack.ui || '未使用'}
+
+## 目录结构特点
+
+${getDirectoryStructureDescription(dirStructure)}
+
+## 命名规范
+
+- **文件命名**: ${namingConvention.fileNaming}
+- **组件命名**: ${namingConvention.componentNaming}
+- **模块组织**: ${namingConvention.moduleOrganization}
+
+## 使用说明
+
+### 每次对话前
+
+1. **必须调用本 skill**
+2. 确保 docs 文档已初始化
+3. 按照文档模板编写开发文档
+
+### docs 文档目录使用说明
+
+\`\`\`
+docs/
+├── 01-模板中心/         # 开发模板（含通用工具信息）
+├── 02-开发计划/         # 前后端开发文档
+├── 03-项目跟踪/         # Bug/测试/总结/进度
+\`\`\`
+
+## 重要提醒
+
+⚠️ **每次对话必须调用本 skill**
+⚠️ **所有开发文档必须写入 docs 目录**
+⚠️ **必须按照模板格式编写文档**
+
+---
+
+*最后更新：${new Date().toISOString().split('T')[0]}*
+`;
+}
+
+function getProjectTypeDescription(type) {
+  const descriptions = {
+    frontend: '前端项目 - 专注于用户界面和交互体验',
+    backend: '后端项目 - 提供 API 服务和数据处理',
+    fullstack: '全栈项目 - 同时包含前端和后端',
+    monorepo: 'Monorepo 项目 - 多个包/应用统一管理',
+    unknown: '未知类型 - 需要手动配置'
+  };
+  return descriptions[type] || descriptions.unknown;
+}
+
+function getDirectoryStructureDescription(structure) {
+  if (!structure || structure.length === 0) {
+    return '未检测到目录结构';
+  }
+
+  const dirs = structure.filter(s => s.type === 'directory').map(s => s.name);
+  const files = structure.filter(s => s.type === 'file').map(s => s.name);
+
+  let desc = '```\n';
+  if (dirs.length > 0) {
+    desc += '目录:\n';
+    dirs.forEach(d => desc += `  - ${d}/\n`);
+  }
+  if (files.length > 0) {
+    desc += '文件:\n';
+    files.forEach(f => desc += `  - ${f}\n`);
+  }
+  desc += '```';
+
+  return desc;
+}
+
+function getDevelopmentModeDescription(projectType, techStack) {
+  if (projectType === 'frontend' || projectType === 'fullstack') {
+    return `基于 ${techStack.framework || 'Vue'} + ${techStack.buildTool || 'Vite'} 的现代前端开发模式`;
+  } else if (projectType === 'backend') {
+    return '后端 API 服务开发模式';
+  } else if (projectType === 'monorepo') {
+    return 'Monorepo 多包管理模式';
+  }
+  return '标准开发模式';
+}
+
+/**
+ * 扫描前端通用工具
+ */
+async function scanFrontendTools(projectRoot, docsPath, analysis) {
+  console.log('  扫描前端工具...');
+
+  const templatePath = path.join(docsPath, '01-模板中心', '前端开发模板.md');
+  if (!fs.existsSync(templatePath)) {
+    console.warn('  ⚠️ 前端开发模板不存在');
+    return;
+  }
+
+  let template = fs.readFileSync(templatePath, 'utf-8');
+
+  // 扫描 API 请求封装
+  const apiInfo = scanApiRequest(projectRoot, analysis);
+  if (apiInfo) {
+    template = template.replace('【初始化时自动检测】', apiInfo.path);
+    template = template.replace('// 【初始化时根据项目实际代码生成】', apiInfo.code);
+  }
+
+  // 扫描状态管理
+  const storeInfo = scanStore(projectRoot, analysis);
+  if (storeInfo) {
+    template = template.replace('【初始化时自动检测项目目录结构】',
+      `检测到 ${storeInfo.type} 状态管理`);
+  }
+
+  // 扫描通用组件
+  const components = scanCommonComponents(projectRoot);
+  if (components.length > 0) {
+    const componentTable = components.map(c => `| ${c.name} | ${c.usage} | \`${c.example}\` |`).join('\n');
+    template = template.replace('| 【自动扫描填充】 | 【用途说明】 | 【使用示例】 |', componentTable);
+  }
+
+  // 扫描工具函数
+  const utils = scanUtils(projectRoot);
+  if (utils.length > 0) {
+    const utilsTable = utils.map(u => `| ${u.name} | ${u.usage} | \`${u.example}\` |`).join('\n');
+    template = template.replace('| 【自动扫描填充】 | 【用途说明】 | 【使用示例】 |', utilsTable);
+  }
+
+  fs.writeFileSync(templatePath, template, 'utf-8');
+  console.log('  ✓ 前端模板更新完成');
+}
+
+/**
+ * 扫描后端通用工具
+ */
+async function scanBackendTools(projectRoot, docsPath, analysis) {
+  console.log('  扫描后端工具...');
+
+  const templatePath = path.join(docsPath, '01-模板中心', '后端开发模板.md');
+  if (!fs.existsSync(templatePath)) {
+    console.warn('  ⚠️ 后端开发模板不存在');
+    return;
+  }
+
+  let template = fs.readFileSync(templatePath, 'utf-8');
+
+  // 扫描 API 返回封装
+  const responseInfo = scanApiResponse(projectRoot, analysis);
+  if (responseInfo) {
+    template = template.replace('【初始化时自动检测】', responseInfo.path);
+  }
+
+  // 扫描分页工具
+  const paginationInfo = scanPagination(projectRoot, analysis);
+  if (paginationInfo) {
+    template = template.replace('【封装位置】：`【初始化时自动检测】`',
+      `【封装位置】：\`${paginationInfo.path}\``);
+  }
+
+  // 扫描中间件
+  const middlewares = scanMiddlewares(projectRoot);
+  if (middlewares.length > 0) {
+    const middlewareTable = middlewares.map(m => `| ${m.name} | ${m.usage} |`).join('\n');
+    console.log('  ✓ 检测到中间件:', middlewares.map(m => m.name).join(', '));
+  }
+
+  fs.writeFileSync(templatePath, template, 'utf-8');
+  console.log('  ✓ 后端模板更新完成');
+}
+
+function scanApiRequest(projectRoot, analysis) {
+  const possiblePaths = [
+    'src/utils/request.ts',
+    'src/utils/request.js',
+    'src/api/request.ts',
+    'src/api/request.js',
+    'src/http/request.ts',
+    'src/http/request.js',
+  ];
+
+  for (const p of possiblePaths) {
+    const fullPath = path.join(projectRoot, p);
+    if (fs.existsSync(fullPath)) {
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      return {
+        path: p,
+        code: content.slice(0, 500)
+      };
+    }
+  }
+  return null;
+}
+
+function scanStore(projectRoot, analysis) {
+  if (fs.existsSync(path.join(projectRoot, 'src/store'))) {
+    if (fs.existsSync(path.join(projectRoot, 'src/stores'))) {
+      return { type: 'Pinia' };
+    }
+    return { type: 'Vuex' };
+  }
+  return null;
+}
+
+function scanCommonComponents(projectRoot) {
+  const components = [];
+  const componentsPath = path.join(projectRoot, 'src/components');
+
+  if (fs.existsSync(componentsPath)) {
+    const entries = fs.readdirSync(componentsPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        components.push({
+          name: entry.name,
+          usage: `通用${entry.name}组件`,
+          example: `<${entry.name} />`
+        });
+      }
+    }
+  }
+
+  return components.slice(0, 5);
+}
+
+function scanUtils(projectRoot) {
+  const utils = [];
+  const utilsPath = path.join(projectRoot, 'src/utils');
+
+  if (fs.existsSync(utilsPath)) {
+    const entries = fs.readdirSync(utilsPath);
+    for (const entry of entries) {
+      if (entry.endsWith('.ts') || entry.endsWith('.js')) {
+        if (entry !== 'request.ts' && entry !== 'request.js') {
+          utils.push({
+            name: entry.replace(/\.(ts|js)$/, ''),
+            usage: '工具函数',
+            example: `import { xxx } from '@/utils/${entry.replace(/\.(ts|js)$/, '')}'`
+          });
+        }
+      }
+    }
+  }
+
+  return utils.slice(0, 5);
+}
+
+function scanApiResponse(projectRoot, analysis) {
+  const possiblePaths = [
+    'src/common/response.ts',
+    'src/common/response.js',
+    'src/utils/response.ts',
+    'src/utils/response.js',
+    'src/helpers/response.ts',
+  ];
+
+  for (const p of possiblePaths) {
+    const fullPath = path.join(projectRoot, p);
+    if (fs.existsSync(fullPath)) {
+      return { path: p };
+    }
+  }
+  return null;
+}
+
+function scanPagination(projectRoot, analysis) {
+  const possiblePaths = [
+    'src/common/utils/pagination.ts',
+    'src/utils/pagination.ts',
+    'src/helpers/pagination.ts',
+  ];
+
+  for (const p of possiblePaths) {
+    const fullPath = path.join(projectRoot, p);
+    if (fs.existsSync(fullPath)) {
+      return { path: p };
+    }
+  }
+  return null;
+}
+
+function scanMiddlewares(projectRoot) {
+  const middlewares = [];
+  const middlewarePaths = ['src/middleware', 'src/middlewares'];
+
+  for (const p of middlewarePaths) {
+    const fullPath = path.join(projectRoot, p);
+    if (fs.existsSync(fullPath)) {
+      const entries = fs.readdirSync(fullPath);
+      for (const entry of entries) {
+        if (entry.endsWith('.ts') || entry.endsWith('.js')) {
+          middlewares.push({
+            name: entry.replace(/\.(ts|js)$/, ''),
+            usage: '中间件'
+          });
+        }
+      }
+    }
+  }
+
+  return middlewares;
 }
 
 // 导出命令
 module.exports = {
-  autoInit,
+  // 功能一：项目初始化
+  projectInit,
   initDocs,
   analyzeProject,
   copyDir,
+
+  // 功能二：模块开发流程
+  moduleStart,
+  moduleComplete,
+  moduleUpdate,
+  createModuleDoc,
+
+  // 功能三：按需文档
+  createBugDoc,
+  createSummaryDoc,
+  createTestDoc,
+
+  // 配置更新
   updateVitePressConfig,
   updateIndexFiles,
-  createModuleDoc,
+
+  // 工具扫描
   scanProjectTools
 };

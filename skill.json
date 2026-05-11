@@ -1,7 +1,7 @@
 {
   "name": "ai-dev-assistant",
-  "version": "1.0.0",
-  "description": "AI 开发助手 - 辅助 AI 进行开发文档编写（计划、开发、BUG、总结）",
+  "version": "2.2.0",
+  "description": "AI 开发助手 - 辅助 AI 进行开发文档编写（项目初始化、模块开发流程、Bug/测试/总结文档）",
   "author": "AI Assistant",
   "license": "MIT",
   "main": "src/index.js",
@@ -15,8 +15,20 @@
   ],
   "commands": [
     {
-      "name": "auto-init",
-      "description": "智能初始化 - 自动完成 docs 初始化、项目分析、模块文档生成、配置更新（推荐）"
+      "name": "project-init",
+      "description": "项目初始化 - 新项目启动时自动执行"
+    },
+    {
+      "name": "module-start",
+      "description": "模块启动 - 创建新模块开发计划"
+    },
+    {
+      "name": "module-complete",
+      "description": "模块完成 - 更新模块状态"
+    },
+    {
+      "name": "module-update",
+      "description": "模块更新 - 开发过程中更新文档"
     },
     {
       "name": "create-bug-doc",
@@ -27,12 +39,8 @@
       "description": "创建总结复盘文档"
     },
     {
-      "name": "update-vitepress-config",
-      "description": "自动更新 VitePress 侧边栏配置（新增文档时调用）"
-    },
-    {
-      "name": "update-index-files",
-      "description": "更新 index.md 进度表格"
+      "name": "create-test-doc",
+      "description": "创建测试文档"
     }
   ],
   "permissions": [
