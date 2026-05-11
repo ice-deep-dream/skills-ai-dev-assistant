@@ -1,83 +1,70 @@
 ---
-layout: home
-
-hero:
-  name: "XXX文档中心"
-  text: "项目开发规范与指南"
-  tagline: 统一的开发规范、模板与最佳实践，助力高效协作
-  image:
-    src: /common.svg
-    alt: XXX Logo
-  actions:
-    - theme: brand
-      text: 开始使用
-      link: /01-文档规范/
-    - theme: alt
-      text: 模板中心
-      link: /02-模板中心/
-
-features:
-  - icon: 📋
-    title: 文档规范
-    details: 统一的文档编写规范，包括命名规则、Frontmatter标准，确保文档风格一致、易于维护。
-  - icon: 📝
-    title: 模板中心
-    details: 前端/后端开发模板、Bug报告模板、测试模板等，提升开发效率，减少重复工作。
-  - icon: 🚀
-    title: 最佳实践
-    details: 汇集项目开发的最佳实践，前后端开发指南，部署运维手册，助力团队高效协作。
-  - icon: 🐛
-    title: Bug 管理
-    details: 统一的 Bug 报告和处理流程，问题追踪与解决方案记录，持续改进产品质量。
+title: 项目文档
+description: AI 开发助手文档站点
 ---
 
-## 快速导航
+# 项目文档
 
-<div class="quick-links">
+> 基于项目的开发文档体系
 
-### 📚 文档规范
-- [文档说明](/01-文档规范/001-文档说明) - 文档中心使用指南
-- [命名规范](/01-文档规范/002-命名规范) - 文件与目录命名规则
-- [Frontmatter规范](/01-文档规范/003-Frontmatter规范) - 元数据标准
+## 目录导航
 
-### 📝 模板中心
-- [前端模块开发模板](/02-模板中心/001-前端模块开发模板)
-- [后端模块开发模板](/02-模板中心/002-后端模块开发模板)
-- [Bug模板](/02-模板中心/003-Bug模板)
-- [更多模板...](/02-模板中心/)
+### [模板中心](/01-模板中心/)
 
-</div>
+**核心功能**：开发模板 + 项目通用工具信息
 
-<style>
-.quick-links {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-top: 2rem;
-}
+- 开发模板：前端/后端模块开发模板
+- **通用工具信息**：初始化时自动扫描项目并填充（API封装、状态管理、通用组件等）
 
-.quick-links h3 {
-  margin-top: 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--vp-c-divider);
-}
+### [开发计划](/02-开发计划/)
 
-.quick-links ul {
-  list-style: none;
-  padding: 0;
-}
+前后端开发文档统一管理
 
-.quick-links li {
-  margin: 0.5rem 0;
-}
+- 模块开发文档
+- 开发进度跟踪
 
-.quick-links a {
-  color: var(--vp-c-text-1);
-  text-decoration: none;
-  transition: color 0.2s;
-}
+### [项目跟踪](/03-项目跟踪/)
 
-.quick-links a:hover {
-  color: var(--vp-c-brand);
-}
-</style>
+Bug、测试、总结复盘、开发进度统一管理
+
+- Bug 跟踪
+- 测试文档
+- 总结复盘
+- 开发进度
+
+---
+
+## 快速开始
+
+### 初始化流程
+
+```
+调用 auto-init
+    ↓
+自动创建目录结构
+    ↓
+自动扫描项目代码
+    ↓
+填充模板通用工具信息
+    ↓
+开始开发
+```
+
+### 日常开发流程
+
+1. 复制模板创建开发文档（02-开发计划/）
+2. 参考模板中的通用工具信息开发
+3. skills 模块结束时自动记录到项目跟踪
+4. 开发过程中询问用户是否写入项目跟踪
+
+---
+
+## 核心特点
+
+1. **自动填充**：初始化时自动扫描项目，填充通用工具信息
+2. **简化结构**：模板合并通用工具，减少文件数量
+3. **自动记录**：模块开始/结束自动记录，过程询问用户
+
+---
+
+*AI 开发助手 - 让文档成为开发的助力*
