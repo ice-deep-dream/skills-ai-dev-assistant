@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"C:/Users/11726/.claude/skills/\" 2>/dev/null || echo \"目录不存在\")",
+      "Read(//c/Users/11726/.claude/skills/**)",
+      "Bash(cp -r \"D:/ice-code-all/skills/skills-git\" \"C:/Users/11726/.claude/skills/git\" && ls -la \"C:/Users/11726/.claude/skills/\")",
+      "Bash(rm -rf \"C:/Users/11726/.claude/skills/git/.git\" && ls -la \"C:/Users/11726/.claude/skills/git/\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\11726\\.claude\\skills\\git\\.git"
+    ]
+  }
+}
