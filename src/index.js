@@ -1,6 +1,8 @@
 /**
- * AI 开发助手 Skill v2.0
+ * AI 开发助手 Skill v3.0
  * 辅助 AI 进行开发文档编写
+ *
+ * 兼容 Claude Code Skill 格式
  *
  * 核心功能：
  * 1. 项目初始化 (project-init) - 新项目启动时自动执行
@@ -16,9 +18,36 @@
 
 const fs = require('fs');
 const path = require('path');
+const matter = require('gray-matter');
 
 // 源 docs 目录路径（在技能根目录下）
 const SOURCE_DOCS_PATH = path.join(__dirname, '..', 'docs');
+
+// 默认扫描路径配置（可扩展）
+const DEFAULT_SCAN_PATHS = {
+  apiRequest: [
+    'src/utils/request.ts', 'src/utils/request.js',
+    'src/api/request.ts', 'src/api/request.js',
+    'src/http/request.ts', 'src/http/request.js',
+    'src/services/request.ts', 'src/services/request.js',
+    'lib/utils/request.ts', 'lib/utils/request.js',
+    'app/utils/request.ts', 'app/utils/request.js',
+  ],
+  apiResponse: [
+    'src/common/response.ts', 'src/common/response.js',
+    'src/utils/response.ts', 'src/utils/response.js',
+    'src/helpers/response.ts', 'src/helpers/response.js',
+    'lib/common/response.ts', 'lib/common/response.js',
+  ],
+  pagination: [
+    'src/common/utils/pagination.ts', 'src/utils/pagination.ts',
+    'src/helpers/pagination.ts', 'lib/utils/pagination.ts',
+  ],
+  store: ['src/store', 'src/stores'],
+  components: ['src/components', 'src/components/common', 'src/shared/components'],
+  utils: ['src/utils', 'src/lib', 'src/helpers'],
+  middlewares: ['src/middleware', 'src/middlewares'],
+};
 
 /**
  * 复制目录（递归）
@@ -41,6 +70,94 @@ function copyDir(src, dest) {
       console.log(`已复制：${entry.name}`);
     }
   }
+}
+
+// ============================================
+// 工具函数
+// ============================================
+
+/**
+ * 解析文件的 frontmatter
+ */
+function parseFrontmatter(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const parsed = matter(content);
+  return {
+    data: parsed.data || {},
+    content: parsed.content,
+    raw: content
+  };
+}
+
+/**
+ * 序列化带 frontmatter 的文件
+ */
+function stringifyFrontmatter(data, content) {
+  return matter.stringify(content, data);
+}
+
+/**
+ * 更新文件的 frontmatter 字段
+ */
+function updateFrontmatter(filePath, updates) {
+  const parsed = parseFrontmatter(filePath);
+  if (!parsed) {
+    throw new Error(`文件不存在：${filePath}`);
+  }
+
+  const newData = { ...parsed.data, ...updates };
+  const newContent = stringifyFrontmatter(newData, parsed.content);
+  fs.writeFileSync(filePath, newContent, 'utf-8');
+
+  return newData;
+}
+
+/**
+ * 生成唯一文件名（时间戳 + 序号）
+ */
+function generateUniqueFileName(prefix, title, existingFiles) {
+  const timestamp = Date.now();
+  const safeTitle = title.replace(/\s+/g, '-').replace(/[^\w一-龥-]/g, '');
+  let fileName = `${prefix}-${timestamp}-${safeTitle}.md`;
+
+  // 如果冲突，添加随机后缀
+  if (existingFiles.includes(fileName)) {
+    const randomSuffix = Math.random().toString(36).substring(2, 6);
+    fileName = `${prefix}-${timestamp}-${randomSuffix}-${safeTitle}.md`;
+  }
+
+  return fileName;
+}
+
+/**
+ * 验证必填参数
+ */
+function validateRequired(params, requiredFields) {
+  const missing = [];
+  for (const field of requiredFields) {
+    if (params[field] === undefined || params[field] === null || params[field] === '') {
+      missing.push(field);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`缺少必填参数：${missing.join(', ')}`);
+  }
+}
+
+/**
+ * 在多个可能路径中查找存在的文件
+ */
+function findExistingPath(projectRoot, paths) {
+  for (const p of paths) {
+    const fullPath = path.join(projectRoot, p);
+    if (fs.existsSync(fullPath)) {
+      return { path: p, fullPath };
+    }
+  }
+  return null;
 }
 
 // ============================================
@@ -184,24 +301,30 @@ async function projectInit(projectRoot) {
     indexFiles: null
   };
 
+  const completedSteps = [];
+
   try {
     // 第 1 步：初始化 docs 目录
     console.log('\n📁 第 1 步：初始化 docs 目录...');
     results.docsInit = await initDocs(projectRoot);
+    completedSteps.push('docsInit');
 
     // 第 2 步：分析项目
     console.log('\n🔍 第 2 步：分析项目结构...');
     results.projectAnalysis = await analyzeProject(projectRoot);
+    completedSteps.push('projectAnalysis');
 
     // 第 3 步：扫描项目通用工具并更新模板
     console.log('\n📝 第 3 步：扫描项目通用工具...');
     const docsPath = path.join(projectRoot, 'docs');
     results.toolsScan = await scanProjectTools(projectRoot, docsPath);
+    completedSteps.push('toolsScan');
 
     // 第 4 步：更新 VitePress 配置
     console.log('\n⚙️ 第 4 步：更新 VitePress 侧边栏配置...');
     try {
       results.vitepressConfig = await updateVitePressConfig(docsPath);
+      completedSteps.push('vitepressConfig');
     } catch (error) {
       console.warn(`⚠️ VitePress 配置更新失败：${error.message}`);
     }
@@ -210,6 +333,7 @@ async function projectInit(projectRoot) {
     console.log('\n📊 第 5 步：更新进度表格...');
     try {
       results.indexFiles = await updateIndexFiles(docsPath);
+      completedSteps.push('indexFiles');
     } catch (error) {
       console.warn(`⚠️ 进度表格更新失败：${error.message}`);
     }
@@ -229,7 +353,14 @@ async function projectInit(projectRoot) {
 
   } catch (error) {
     console.error('❌ 项目初始化失败：', error.message);
-    throw error;
+
+    // 返回部分完成的结果，便于调用方了解进度
+    return {
+      success: false,
+      message: `项目初始化失败：${error.message}`,
+      completedSteps,
+      results
+    };
   }
 }
 
@@ -242,6 +373,9 @@ async function projectInit(projectRoot) {
  * 流程：需求确认 → 计划 → 文档 → 更新配置
  */
 async function moduleStart(projectRoot, options) {
+  // 参数验证
+  validateRequired(options, ['moduleName']);
+
   const {
     moduleName,
     moduleType = 'frontend', // frontend | backend
@@ -298,6 +432,10 @@ async function moduleStart(projectRoot, options) {
  * 流程：更新状态 → 更新进度 → 更新配置
  */
 async function moduleComplete(projectRoot, moduleName) {
+  if (!moduleName) {
+    throw new Error('缺少必填参数：moduleName');
+  }
+
   console.log(`🎉 模块完成：${moduleName}`);
   console.log('='.repeat(50));
 
@@ -314,25 +452,40 @@ async function moduleComplete(projectRoot, moduleName) {
   }
 
   const filePath = path.join(devPlanPath, files[0]);
-  let content = fs.readFileSync(filePath, 'utf-8');
   const today = new Date().toISOString().split('T')[0];
 
-  // 更新 frontmatter
-  content = content.replace(/status:\s*\w+/, 'status: completed');
-  content = content.replace(/progress:\s*\d+/, 'progress: 100');
-  content = content.replace(/updated:\s*[\d-]+/, `updated: ${today}`);
+  // 使用 gray-matter 解析并更新 frontmatter
+  const parsed = parseFrontmatter(filePath);
+  if (!parsed) {
+    throw new Error(`无法解析文件：${filePath}`);
+  }
 
-  // 添加完成记录
-  const updateRecordRegex = /\| 日期 \| 内容 \| 更新人 \|[\s\S]*?(?=\n\n|---|$)/;
+  const newData = {
+    ...parsed.data,
+    status: 'completed',
+    progress: 100,
+    updated: today
+  };
+
+  // 更新内容中的更新记录
+  let content = parsed.content;
+  const updateRecordRegex = /(\| 日期 \| 内容 \| 更新人 \|[\s\S]*?)(\n\n|---|$)/;
   const newRecord = `| ${today} | 模块开发完成 | - |`;
 
   if (updateRecordRegex.test(content)) {
     content = content.replace(updateRecordRegex, (match) => {
-      return match.trim() + `\n${newRecord}`;
+      // 找到表格最后一行（不含表头）
+      const lines = match.trim().split('\n');
+      const lastLineIndex = lines.length - 1;
+      // 在最后一行后添加新记录
+      lines.splice(lastLineIndex + 1, 0, newRecord);
+      return lines.join('\n') + '\n';
     });
   }
 
-  fs.writeFileSync(filePath, content, 'utf-8');
+  // 写入文件
+  const newContent = stringifyFrontmatter(newData, content);
+  fs.writeFileSync(filePath, newContent, 'utf-8');
   console.log(`✓ 已更新文档状态：${files[0]}`);
 
   // 更新进度表格
@@ -357,6 +510,10 @@ async function moduleComplete(projectRoot, moduleName) {
  * 流程：更新内容 → 更新进度
  */
 async function moduleUpdate(projectRoot, moduleName, updates) {
+  if (!moduleName) {
+    throw new Error('缺少必填参数：moduleName');
+  }
+
   console.log(`📝 模块更新：${moduleName}`);
 
   const docsPath = path.join(projectRoot, 'docs');
@@ -372,31 +529,42 @@ async function moduleUpdate(projectRoot, moduleName, updates) {
   }
 
   const filePath = path.join(devPlanPath, files[0]);
-  let content = fs.readFileSync(filePath, 'utf-8');
   const today = new Date().toISOString().split('T')[0];
 
-  // 更新 frontmatter
+  // 使用 gray-matter 解析
+  const parsed = parseFrontmatter(filePath);
+  if (!parsed) {
+    throw new Error(`无法解析文件：${filePath}`);
+  }
+
+  const newData = { ...parsed.data, updated: today };
+  let content = parsed.content;
+
+  // 更新 frontmatter 字段
   if (updates.status) {
-    content = content.replace(/status:\s*\w+/, `status: ${updates.status}`);
+    newData.status = updates.status;
   }
   if (updates.progress !== undefined) {
-    content = content.replace(/progress:\s*\d+/, `progress: ${updates.progress}`);
+    newData.progress = updates.progress;
   }
-  content = content.replace(/updated:\s*[\d-]+/, `updated: ${today}`);
 
   // 添加更新记录
   if (updates.note) {
-    const updateRecordRegex = /\| 日期 \| 内容 \| 更新人 \|[\s\S]*?(?=\n\n|---|$)/;
+    const updateRecordRegex = /(\| 日期 \| 内容 \| 更新人 \|[\s\S]*?)(\n\n|---|$)/;
     const newRecord = `| ${today} | ${updates.note} | - |`;
 
     if (updateRecordRegex.test(content)) {
       content = content.replace(updateRecordRegex, (match) => {
-        return match.trim() + `\n${newRecord}`;
+        const lines = match.trim().split('\n');
+        lines.push(newRecord);
+        return lines.join('\n') + '\n';
       });
     }
   }
 
-  fs.writeFileSync(filePath, content, 'utf-8');
+  // 写入文件
+  const newContent = stringifyFrontmatter(newData, content);
+  fs.writeFileSync(filePath, newContent, 'utf-8');
   console.log(`✓ 已更新文档：${files[0]}`);
 
   // 更新进度表格
@@ -417,7 +585,10 @@ async function moduleUpdate(projectRoot, moduleName, updates) {
  * 创建 Bug 跟踪文档
  */
 async function createBugDoc(projectRoot, options) {
-  const { title, description, priority = 'medium', steps = '', expected = '', actual = '' } = options;
+  // 参数验证
+  validateRequired(options, ['title']);
+
+  const { title, description = '', priority = 'medium', steps = '', expected = '', actual = '' } = options;
 
   console.log(`🐛 创建 Bug 文档：${title}`);
 
@@ -429,23 +600,27 @@ async function createBugDoc(projectRoot, options) {
     fs.mkdirSync(trackPath, { recursive: true });
   }
 
-  // 生成文件名
-  const files = fs.readdirSync(trackPath).filter(f => f.startsWith('BUG-'));
-  const nextNum = files.length + 1;
-  const fileName = `BUG-${String(nextNum).padStart(3, '0')}-${title.replace(/\s+/g, '-')}.md`;
+  // 获取现有文件列表
+  const existingFiles = fs.readdirSync(trackPath);
+
+  // 生成唯一文件名
+  const fileName = generateUniqueFileName('BUG', title, existingFiles);
   const filePath = path.join(trackPath, fileName);
 
   const today = new Date().toISOString().split('T')[0];
 
+  // 提取编号
+  const bugId = fileName.match(/BUG-(\d+)/)?.[1] || Date.now().toString();
+
   const content = `---
 title: ${title}
-description: ${description}
+description: ${description || title}
 category: Bug
 tags:
   - bug
   - ${priority}
 status: new
-bugId: BUG-${String(nextNum).padStart(3, '0')}
+bugId: BUG-${bugId}
 priority: ${priority}
 created: ${today}
 updated: ${today}
@@ -455,7 +630,7 @@ updated: ${today}
 
 ## 问题描述
 
-${description}
+${description || '待补充'}
 
 ## 复现步骤
 
@@ -499,6 +674,9 @@ ${actual || '待补充'}
  * 创建总结复盘文档
  */
 async function createSummaryDoc(projectRoot, options) {
+  // 参数验证
+  validateRequired(options, ['title']);
+
   const { title, type = 'project', content: summaryContent = '' } = options;
 
   console.log(`📋 创建总结文档：${title}`);
@@ -511,11 +689,14 @@ async function createSummaryDoc(projectRoot, options) {
     fs.mkdirSync(trackPath, { recursive: true });
   }
 
-  // 生成文件名
-  const today = new Date();
-  const dateStr = today.toISOString().replace(/-/g, '').slice(0, 8);
-  const fileName = `总结-${dateStr}-${title.replace(/\s+/g, '-')}.md`;
+  // 获取现有文件列表
+  const existingFiles = fs.readdirSync(trackPath);
+
+  // 生成唯一文件名
+  const fileName = generateUniqueFileName('总结', title, existingFiles);
   const filePath = path.join(trackPath, fileName);
+
+  const today = new Date().toISOString().split('T')[0];
 
   const content = `---
 title: ${title}
@@ -524,7 +705,7 @@ category: 总结
 tags:
   - 总结
   - ${type}
-created: ${today.toISOString().split('T')[0]}
+created: ${today}
 ---
 
 # ${title}
@@ -557,7 +738,7 @@ created: ${today.toISOString().split('T')[0]}
 
 ---
 
-${summaryContent}
+${summaryContent || '<!-- 补充内容 -->'}
 
 ---
 
@@ -577,6 +758,9 @@ ${summaryContent}
  * 创建测试文档
  */
 async function createTestDoc(projectRoot, options) {
+  // 参数验证
+  validateRequired(options, ['title']);
+
   const { title, testType = 'manual', moduleName = '', testCases = [] } = options;
 
   console.log(`🧪 创建测试文档：${title}`);
@@ -589,22 +773,23 @@ async function createTestDoc(projectRoot, options) {
     fs.mkdirSync(trackPath, { recursive: true });
   }
 
-  // 生成文件名
-  const files = fs.readdirSync(trackPath).filter(f => f.startsWith('TEST-'));
-  const nextNum = files.length + 1;
-  const fileName = `TEST-${String(nextNum).padStart(3, '0')}-${title.replace(/\s+/g, '-')}.md`;
+  // 获取现有文件列表
+  const existingFiles = fs.readdirSync(trackPath);
+
+  // 生成唯一文件名
+  const fileName = generateUniqueFileName('TEST', title, existingFiles);
   const filePath = path.join(trackPath, fileName);
 
   const today = new Date().toISOString().split('T')[0];
 
   // 生成测试用例表格
   const testCaseTable = testCases.length > 0
-    ? testCases.map((tc, i) => `| ${i + 1} | ${tc.name} | ${tc.steps || '待补充'} | ${tc.expected || '待补充'} | 待执行 |`).join('\n')
+    ? testCases.map((tc, i) => `| ${i + 1} | ${tc.name || '待补充'} | ${tc.steps || '待补充'} | ${tc.expected || '待补充'} | 待执行 |`).join('\n')
     : '| 1 | 待补充 | 待补充 | 待补充 | 待执行 |';
 
   const content = `---
 title: ${title}
-description: ${moduleName} 测试文档
+description: ${moduleName ? `${moduleName} 测试文档` : '测试文档'}
 category: 测试
 tags:
   - 测试
@@ -707,19 +892,33 @@ async function createModuleDoc(docsPath, options) {
   template = template.replace(/【负责人】/g, owner);
   template = template.replace(/【日期】/g, today);
 
-  // 添加需求清单
+  // 替换功能清单占位符
   if (requirements.length > 0) {
-    const reqList = requirements.map(r => `- [ ] ${r}`).join('\n');
-    template = template.replace(/- \[ \] 【功能\d+】/g, '');
+    const reqList = requirements.map((r, i) => `- [ ] ${r}`).join('\n');
+    // 移除默认的功能占位符
+    template = template.replace(/- \[ \] 【功能\d+】\n?/g, '');
+    // 在功能清单后添加实际需求
     template = template.replace(
       '**功能清单**：',
       `**功能清单**：\n${reqList}`
     );
   }
 
+  // 替换依赖模块占位符
+  template = template.replace(/- \[ \] 【依赖模块】\n?/g, '');
+  template = template.replace(/- \[ \] 【被依赖模块】\n?/g, '');
+
   // 添加开发计划
   if (plan) {
     template += `\n\n## 开发计划\n\n${plan}\n`;
+  }
+
+  // 添加描述
+  if (description) {
+    template = template.replace(
+      '### 3.1 模块目标',
+      `### 3.1 模块目标\n\n${description}\n`
+    );
   }
 
   // 写入文件
@@ -737,7 +936,7 @@ async function createModuleDoc(docsPath, options) {
 }
 
 /**
- * 自动更新 VitePress 配置文件
+ * 自动更新 VitePress 配置文件（增量更新 sidebar）
  */
 async function updateVitePressConfig(docsPath) {
   const configPath = path.join(docsPath, '.vitepress', 'config.ts');
@@ -784,17 +983,12 @@ async function updateVitePressConfig(docsPath) {
     for (const file of files) {
       const link = `/${path.posix.join(dirName, file).replace('.md', '')}`;
 
-      // 读取文件 Frontmatter 获取标题
+      // 使用 gray-matter 读取标题
       let text = file.replace('.md', '');
       try {
-        const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
-        const frontmatterMatch = content.match(/---\n([\s\S]*?)\n---/);
-        if (frontmatterMatch) {
-          const frontmatter = frontmatterMatch[1];
-          const titleMatch = frontmatter.match(/title:\s*(.+)/);
-          if (titleMatch) {
-            text = titleMatch[1].trim();
-          }
+        const parsed = parseFrontmatter(path.join(dirPath, file));
+        if (parsed && parsed.data.title) {
+          text = parsed.data.title;
         }
       } catch (e) {
         console.warn(`读取文件失败：${file}`);
@@ -812,6 +1006,14 @@ async function updateVitePressConfig(docsPath) {
       collapsed: dirConfigItem.collapsed,
       items
     });
+  }
+
+  // 读取现有配置，尝试保留其他设置
+  let existingConfig = '';
+  try {
+    existingConfig = fs.readFileSync(configPath, 'utf-8');
+  } catch (e) {
+    // 忽略读取错误
   }
 
   // 生成新的配置文件
@@ -877,32 +1079,24 @@ async function updateIndexFiles(docsPath) {
   const modules = [];
   for (const file of files) {
     const filePath = path.join(dirPath, file);
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed = parseFrontmatter(filePath);
 
-    const frontmatterMatch = content.match(/---\n([\s\S]*?)\n---/);
-    if (frontmatterMatch) {
-      const frontmatter = frontmatterMatch[1];
-
-      const extractField = (field) => {
-        const match = frontmatter.match(new RegExp(`${field}:\\s*(.+)`));
-        return match ? match[1].trim() : '-';
-      };
-
+    if (parsed) {
       modules.push({
         file: file.replace('.md', ''),
-        title: extractField('title'),
-        status: extractField('status'),
-        progress: extractField('progress'),
-        owner: extractField('owner'),
-        created: extractField('created'),
-        updated: extractField('updated')
+        title: parsed.data.title || file.replace('.md', ''),
+        status: parsed.data.status || '-',
+        progress: parsed.data.progress || 0,
+        owner: parsed.data.owner || '-',
+        created: parsed.data.created || '-',
+        updated: parsed.data.updated || '-'
       });
     }
   }
 
   // 生成进度表格
   const tableRows = modules.map(m =>
-    `| [${m.title || m.file}](/02-开发计划/${m.file}) | ${m.status} | ${m.progress}% | ${m.owner} | ${m.created} | ${m.updated} |`
+    `| [${m.title}](/02-开发计划/${m.file}) | ${m.status} | ${m.progress}% | ${m.owner} | ${m.created} | ${m.updated} |`
   ).join('\n');
 
   // 读取 index.md
@@ -1210,17 +1404,20 @@ async function scanFrontendTools(projectRoot, docsPath, analysis) {
   let template = fs.readFileSync(templatePath, 'utf-8');
 
   // 扫描 API 请求封装
-  const apiInfo = scanApiRequest(projectRoot, analysis);
+  const apiInfo = findExistingPath(projectRoot, DEFAULT_SCAN_PATHS.apiRequest);
   if (apiInfo) {
     template = template.replace('【初始化时自动检测】', apiInfo.path);
-    template = template.replace('// 【初始化时根据项目实际代码生成】', apiInfo.code);
+    const content = fs.readFileSync(apiInfo.fullPath, 'utf-8');
+    template = template.replace('// 【初始化时根据项目实际代码生成】',
+      `// 实际代码（前500字符）:\n// ${content.slice(0, 500).split('\n').join('\n// ')}`);
   }
 
   // 扫描状态管理
-  const storeInfo = scanStore(projectRoot, analysis);
+  const storeInfo = findExistingPath(projectRoot, DEFAULT_SCAN_PATHS.store);
   if (storeInfo) {
+    const isPinia = storeInfo.path.includes('stores');
     template = template.replace('【初始化时自动检测项目目录结构】',
-      `检测到 ${storeInfo.type} 状态管理`);
+      `检测到 ${isPinia ? 'Pinia' : 'Vuex'} 状态管理，目录：${storeInfo.path}`);
   }
 
   // 扫描通用组件
@@ -1256,13 +1453,13 @@ async function scanBackendTools(projectRoot, docsPath, analysis) {
   let template = fs.readFileSync(templatePath, 'utf-8');
 
   // 扫描 API 返回封装
-  const responseInfo = scanApiResponse(projectRoot, analysis);
+  const responseInfo = findExistingPath(projectRoot, DEFAULT_SCAN_PATHS.apiResponse);
   if (responseInfo) {
     template = template.replace('【初始化时自动检测】', responseInfo.path);
   }
 
   // 扫描分页工具
-  const paginationInfo = scanPagination(projectRoot, analysis);
+  const paginationInfo = findExistingPath(projectRoot, DEFAULT_SCAN_PATHS.pagination);
   if (paginationInfo) {
     template = template.replace('【封装位置】：`【初始化时自动检测】`',
       `【封装位置】：\`${paginationInfo.path}\``);
@@ -1279,53 +1476,23 @@ async function scanBackendTools(projectRoot, docsPath, analysis) {
   console.log('  ✓ 后端模板更新完成');
 }
 
-function scanApiRequest(projectRoot, analysis) {
-  const possiblePaths = [
-    'src/utils/request.ts',
-    'src/utils/request.js',
-    'src/api/request.ts',
-    'src/api/request.js',
-    'src/http/request.ts',
-    'src/http/request.js',
-  ];
-
-  for (const p of possiblePaths) {
-    const fullPath = path.join(projectRoot, p);
-    if (fs.existsSync(fullPath)) {
-      const content = fs.readFileSync(fullPath, 'utf-8');
-      return {
-        path: p,
-        code: content.slice(0, 500)
-      };
-    }
-  }
-  return null;
-}
-
-function scanStore(projectRoot, analysis) {
-  if (fs.existsSync(path.join(projectRoot, 'src/store'))) {
-    if (fs.existsSync(path.join(projectRoot, 'src/stores'))) {
-      return { type: 'Pinia' };
-    }
-    return { type: 'Vuex' };
-  }
-  return null;
-}
-
 function scanCommonComponents(projectRoot) {
   const components = [];
-  const componentsPath = path.join(projectRoot, 'src/components');
 
-  if (fs.existsSync(componentsPath)) {
-    const entries = fs.readdirSync(componentsPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        components.push({
-          name: entry.name,
-          usage: `通用${entry.name}组件`,
-          example: `<${entry.name} />`
-        });
+  for (const p of DEFAULT_SCAN_PATHS.components) {
+    const componentsPath = path.join(projectRoot, p);
+    if (fs.existsSync(componentsPath)) {
+      const entries = fs.readdirSync(componentsPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          components.push({
+            name: entry.name,
+            usage: `通用${entry.name}组件`,
+            example: `<${entry.name} />`
+          });
+        }
       }
+      break; // 找到一个目录就停止
     }
   }
 
@@ -1334,65 +1501,33 @@ function scanCommonComponents(projectRoot) {
 
 function scanUtils(projectRoot) {
   const utils = [];
-  const utilsPath = path.join(projectRoot, 'src/utils');
 
-  if (fs.existsSync(utilsPath)) {
-    const entries = fs.readdirSync(utilsPath);
-    for (const entry of entries) {
-      if (entry.endsWith('.ts') || entry.endsWith('.js')) {
-        if (entry !== 'request.ts' && entry !== 'request.js') {
-          utils.push({
-            name: entry.replace(/\.(ts|js)$/, ''),
-            usage: '工具函数',
-            example: `import { xxx } from '@/utils/${entry.replace(/\.(ts|js)$/, '')}'`
-          });
+  for (const p of DEFAULT_SCAN_PATHS.utils) {
+    const utilsPath = path.join(projectRoot, p);
+    if (fs.existsSync(utilsPath)) {
+      const entries = fs.readdirSync(utilsPath);
+      for (const entry of entries) {
+        if (entry.endsWith('.ts') || entry.endsWith('.js')) {
+          if (entry !== 'request.ts' && entry !== 'request.js') {
+            utils.push({
+              name: entry.replace(/\.(ts|js)$/, ''),
+              usage: '工具函数',
+              example: `import { xxx } from '@/utils/${entry.replace(/\.(ts|js)$/, '')}'`
+            });
+          }
         }
       }
+      break;
     }
   }
 
   return utils.slice(0, 5);
 }
 
-function scanApiResponse(projectRoot, analysis) {
-  const possiblePaths = [
-    'src/common/response.ts',
-    'src/common/response.js',
-    'src/utils/response.ts',
-    'src/utils/response.js',
-    'src/helpers/response.ts',
-  ];
-
-  for (const p of possiblePaths) {
-    const fullPath = path.join(projectRoot, p);
-    if (fs.existsSync(fullPath)) {
-      return { path: p };
-    }
-  }
-  return null;
-}
-
-function scanPagination(projectRoot, analysis) {
-  const possiblePaths = [
-    'src/common/utils/pagination.ts',
-    'src/utils/pagination.ts',
-    'src/helpers/pagination.ts',
-  ];
-
-  for (const p of possiblePaths) {
-    const fullPath = path.join(projectRoot, p);
-    if (fs.existsSync(fullPath)) {
-      return { path: p };
-    }
-  }
-  return null;
-}
-
 function scanMiddlewares(projectRoot) {
   const middlewares = [];
-  const middlewarePaths = ['src/middleware', 'src/middlewares'];
 
-  for (const p of middlewarePaths) {
+  for (const p of DEFAULT_SCAN_PATHS.middlewares) {
     const fullPath = path.join(projectRoot, p);
     if (fs.existsSync(fullPath)) {
       const entries = fs.readdirSync(fullPath);
@@ -1404,14 +1539,56 @@ function scanMiddlewares(projectRoot) {
           });
         }
       }
+      break;
     }
   }
 
   return middlewares;
 }
 
+// ============================================
+// Claude Code Skill 入口
+// ============================================
+
+/**
+ * Skill 入口函数 - 兼容 Claude Code
+ * @param {string} command - 命令名称
+ * @param {object} options - 命令参数
+ * @param {string} projectRoot - 项目根目录
+ */
+async function execute(command, options = {}, projectRoot = process.cwd()) {
+  const commands = {
+    'project-init': () => projectInit(projectRoot),
+    'module-start': () => moduleStart(projectRoot, options),
+    'module-complete': () => moduleComplete(projectRoot, options.moduleName),
+    'module-update': () => moduleUpdate(projectRoot, options.moduleName, options),
+    'create-bug-doc': () => createBugDoc(projectRoot, options),
+    'create-summary-doc': () => createSummaryDoc(projectRoot, options),
+    'create-test-doc': () => createTestDoc(projectRoot, options),
+  };
+
+  if (!commands[command]) {
+    return {
+      success: false,
+      message: `未知命令：${command}。可用命令：${Object.keys(commands).join(', ')}`
+    };
+  }
+
+  try {
+    return await commands[command]();
+  } catch (error) {
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+}
+
 // 导出命令
 module.exports = {
+  // Skill 入口
+  execute,
+
   // 功能一：项目初始化
   projectInit,
   initDocs,
@@ -1434,5 +1611,11 @@ module.exports = {
   updateIndexFiles,
 
   // 工具扫描
-  scanProjectTools
+  scanProjectTools,
+
+  // 工具函数
+  parseFrontmatter,
+  updateFrontmatter,
+  validateRequired,
+  generateUniqueFileName,
 };

@@ -15,5 +15,8 @@
     "bug-tracking"
   ],
   "author": "AI Assistant",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  }
 }
